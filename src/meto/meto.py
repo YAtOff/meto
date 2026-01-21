@@ -1,6 +1,10 @@
-# TODO: Add code!
+from prompt_toolkit import prompt
+
+
 def main():
-    pass
+    while True:
+        user_input = prompt(">>> ")
+        print(f"You said: {user_input}")
 
 
 if __name__ == "__main__":

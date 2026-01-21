@@ -39,6 +39,7 @@ classifiers = [
 # ---- Main dependencies ----
 
 dependencies = [
+    "prompt-toolkit>=3.0.52",
 ]
 
 
