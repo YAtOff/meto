@@ -40,6 +40,7 @@ classifiers = [
 
 dependencies = [
     "prompt-toolkit>=3.0.52",
+    "typer>=0.21.1",
 ]
 
 
@@ -58,7 +59,7 @@ dev = [
 
 [project.scripts]
 # Add script entry points here:
-meto = "meto:main"
+meto = "meto.cli:main"
 
 
 # ---- Build system ----

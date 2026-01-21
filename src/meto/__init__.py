@@ -1,5 +1,5 @@
-__all__ = (  # noqa: F405
-    # TODO: Add all public symbols here.
-)
+"""meto package."""
 
-from .meto import *  # noqa: F403
+# Keep the package namespace minimal; the console entrypoint is defined in
+# `pyproject.toml` and points at `meto.cli:main`.
+__all__ = ()
