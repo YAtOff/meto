@@ -185,5 +185,8 @@ cython_debug/
 !.vscode/extensions.json
 !.vscode/*.code-snippets
 
+# Claude Code
+.claude/settings.local.json
+
 # Project specific ignores
 .plans/
