@@ -1,6 +1,8 @@
 import os
 import shutil
 import subprocess
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from meto.conf import settings
@@ -70,6 +72,90 @@ def _run_shell(command: str) -> str:
     return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
 
 
+def _format_size(size: float) -> str:
+    """Format file size in human-readable format."""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
+    """List directory contents with structured output.
+
+    Args:
+        path: Directory path to list (defaults to current working directory)
+        recursive: Whether to list subdirectories recursively
+        include_hidden: Whether to include hidden files/directories
+
+    Returns:
+        Formatted string output with entry metadata
+    """
+    try:
+        dir_path = Path(path).expanduser().resolve()
+        if not dir_path.exists():
+            return f"Error: Path does not exist: {path}"
+        if not dir_path.is_dir():
+            return f"Error: Not a directory: {path}"
+    except Exception as ex:
+        return f"Error accessing path '{path}': {ex}"
+
+    lines: list[str] = []
+    lines.append(f"{dir_path}:")
+
+    try:
+        if recursive:
+            # Use Path.rglob() for recursive listing
+            entries = sorted(dir_path.rglob("*"), key=lambda p: (p.parent, p.name))
+        else:
+            entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+
+        for entry in entries:
+            # Skip hidden files if not requested
+            if not include_hidden and entry.name.startswith("."):
+                continue
+
+            entry_type = "dir" if entry.is_dir() else "file"
+            size = 0
+            if entry.is_file():
+                try:
+                    size = entry.stat().st_size
+                except OSError:
+                    pass
+
+            # Format size and last modified time
+            size_str = _format_size(size) if entry.is_file() else ""
+            try:
+                mtime = datetime.fromtimestamp(entry.stat().st_mtime)
+                mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
+            except OSError:
+                mtime_str = "?"
+
+            # Format entry line
+            name = entry.name
+            if recursive:
+                # Show relative path from base directory
+                rel_path = entry.relative_to(dir_path)
+                name = str(rel_path)
+                if entry.is_dir():
+                    name = str(rel_path) + "/"
+
+            # Format: name padded to 30 chars, type, size (for files), date
+            size_col = f"    {size_str:>8}" if size_str else "           "
+            lines.append(f"  {name:<30} ({entry_type:<4}){size_col}    {mtime_str}")
+
+    except PermissionError:
+        return f"Error: Permission denied accessing: {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error listing directory: {ex}"
+
+    if len(lines) == 1:  # Only the header line
+        lines.append("  (empty directory)")
+
+    return "\n".join(lines)
+
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -92,7 +178,38 @@ TOOLS: list[dict[str, Any]] = [
                 "additionalProperties": False,
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_dir",
+            "description": (
+                "List directory contents with structured output showing names, types, sizes, and timestamps. "
+                "Use this for browsing the filesystem structure."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to list (defaults to current working directory if empty).",
+                    },
+                    "recursive": {
+                        "type": "boolean",
+                        "description": "Whether to list subdirectories recursively.",
+                        "default": False,
+                    },
+                    "include_hidden": {
+                        "type": "boolean",
+                        "description": "Whether to include hidden files and directories (those starting with a dot).",
+                        "default": False,
+                    },
+                },
+                "required": [],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
@@ -105,6 +222,13 @@ def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
         if settings.ECHO_COMMANDS:
             print(f"$ {command}")
         tool_output = _run_shell(command)
+    elif tool_name == "list_dir":
+        path = parameters.get("path", ".")
+        recursive = parameters.get("recursive", False)
+        include_hidden = parameters.get("include_hidden", False)
+        if settings.ECHO_COMMANDS:
+            print(f"list_dir: {path} (recursive={recursive}, include_hidden={include_hidden})")
+        tool_output = _list_directory(path, recursive, include_hidden)
 
     if settings.ECHO_COMMANDS and tool_output:
         print(tool_output)
