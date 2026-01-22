@@ -55,6 +55,11 @@ class Settings(BaseSettings):
         description="Whether to print executed shell commands and their outputs.",
     )
 
+    MAX_ECHO_CHARS: int = Field(
+        default=256,
+        description="Maximum number of characters to print when echoing commands and outputs.",
+    )
+
 
 # Global settings instance
 settings = Settings()

@@ -392,6 +392,6 @@ def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
         tool_output = _run_grep_search(pattern, path, case_insensitive)
 
     if settings.ECHO_COMMANDS and tool_output:
-        print(tool_output)
+        print(_truncate(tool_output, settings.MAX_ECHO_CHARS))
 
     return tool_output

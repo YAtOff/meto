@@ -27,26 +27,6 @@ Rules:
 - When you need file context, read it using shell commands (don't guess).
 - Keep outputs succinct; summarize what you learned.
 
-Available tools:
-- shell: Execute a shell command and return its output. Use it to inspect files, edit files, run tests, etc.
-- list_dir: List directory contents with structured output (names, types, sizes, timestamps).
-- grep_search: Search for text patterns in files (uses ripgrep/grep/Select-String).
-
-Shell patterns (PowerShell or bash):
-- List/search:
-    - PowerShell: Get-ChildItem -Recurse ; Select-String
-    - bash: ls ; find . ; grep -R
-    - (Optional) ripgrep: rg
-    - Favor .gitignore awareness when searching.
-- Read files:
-    - PowerShell: Get-Content
-    - bash: cat
-- Write files:
-    - PowerShell: Set-Content / Add-Content / Out-File
-    - bash: printf '...' > file ; printf '...' >> file
-- Run tests:
-    - pytest
-
 Subagent pattern (context isolation via process spawning):
 - For complex, self-contained subtasks, run a subagent by calling this tool to execute:
         meto --one-shot
