@@ -175,6 +175,22 @@ def _read_file(path: str) -> str:
         return f"Error reading file {path}: {ex}"
 
 
+def _write_file(path: str, content: str) -> str:
+    """Write content to a file with proper error handling."""
+    try:
+        file_path = Path(path).expanduser().resolve()
+        # Create parent directories if they don't exist
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        return f"Successfully wrote {len(content)} chars to {path}"
+    except PermissionError:
+        return f"Error: Permission denied writing to {path}"
+    except IsADirectoryError:
+        return f"Error: Path is a directory, not a file: {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error writing file {path}: {ex}"
+
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -250,6 +266,31 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": (
+                "Write content to a file. Creates parent directories if needed. "
+                "Use this for creating or modifying files."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to write.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to write to the file.",
+                    },
+                },
+                "required": ["path", "content"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
@@ -274,6 +315,12 @@ def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
         if settings.ECHO_COMMANDS:
             print(f"read_file: {path}")
         tool_output = _read_file(path)
+    elif tool_name == "write_file":
+        path = parameters.get("path", "")
+        content = parameters.get("content", "")
+        if settings.ECHO_COMMANDS:
+            print(f"write_file: {path} ({len(content)} chars)")
+        tool_output = _write_file(path, content)
 
     if settings.ECHO_COMMANDS and tool_output:
         print(tool_output)
