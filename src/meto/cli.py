@@ -2,13 +2,13 @@
 
 Running modes:
 - No args: starts interactive mode.
-- --stdin: reads the prompt from stdin, prints it, and exits.
+- --one-shot: reads the prompt from stdin, prints it, and exits.
 """
 
 from __future__ import annotations
 
 import sys
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from prompt_toolkit import prompt
@@ -30,6 +30,7 @@ def _strip_single_trailing_newline(text: str) -> str:
 
 
 def interactive_loop(prompt_text: str = ">>> ") -> None:
+    history: list[dict[str, Any]] = []
     while True:
         try:
             user_input = prompt(prompt_text)
@@ -37,24 +38,24 @@ def interactive_loop(prompt_text: str = ">>> ") -> None:
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
 
-        run_agent_loop(user_input)
+        run_agent_loop(user_input, history)
 
 
 @app.callback(invoke_without_command=True)
 def run(
-    stdin: Annotated[
+    one_shot: Annotated[
         bool,
         typer.Option(
-            "--stdin",
+            "--one-shot",
             help="Read the prompt from stdin, run the agent loop with it, and exit.",
         ),
     ] = False,
 ) -> None:
     """Run meto."""
 
-    if stdin:
+    if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        run_agent_loop(text)
+        run_agent_loop(text, [])
         raise typer.Exit(code=0)
 
     interactive_loop()

@@ -33,6 +33,28 @@ class Settings(BaseSettings):
         description="Default model name to use with LiteLLM",
     )
 
+    # --- Agent loop tuning ---
+
+    MAX_TURNS: int = Field(
+        default=25,
+        description="Maximum number of model/tool iterations per prompt.",
+    )
+
+    TOOL_TIMEOUT_SECONDS: int = Field(
+        default=300,
+        description="Timeout (seconds) for a single shell tool command execution.",
+    )
+
+    MAX_TOOL_OUTPUT_CHARS: int = Field(
+        default=50000,
+        description="Maximum number of characters captured from a tool result.",
+    )
+
+    ECHO_COMMANDS: bool = Field(
+        default=True,
+        description="Whether to print executed shell commands and their outputs.",
+    )
+
 
 # Global settings instance
 settings = Settings()
