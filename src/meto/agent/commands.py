@@ -30,6 +30,9 @@ def handle_slash_command(user_input: str, history: list[dict[str, Any]]) -> bool
     elif command == "/export":
         _export_history(history, args)
         return True
+    elif command == "/compact":
+        _compact_history(history)
+        return True
     else:
         print(f"Unknown command: {command}")
         return True
@@ -39,6 +42,7 @@ def _print_help() -> None:
     """Print available commands."""
     print("Available commands:")
     print("  /clear          - Clear conversation history")
+    print("  /compact        - Summarize conversation to reduce token count")
     print("  /export [file]  - Export conversation to JSON")
     print("  /help           - Show this help")
     print("  /quit           - Exit meto")
@@ -61,3 +65,54 @@ def _export_history(history: list[dict[str, Any]], filename: str) -> None:
         print(f"Exported to {filename}")
     except Exception as e:
         print(f"Export failed: {e}")
+
+
+def _compact_history(history: list[dict[str, Any]]) -> None:
+    """Summarize conversation history to reduce token count.
+
+    Uses LLM to create a concise summary of the conversation,
+    then replaces the history with just the summary.
+    """
+    from openai import OpenAI
+
+    from meto.conf import settings
+
+    if not history:
+        print("No history to compact.")
+        return
+
+    # Build conversation text for summarization (exclude system messages)
+    conversation_text = "\n".join(
+        f"{msg['role']}: {msg.get('content', '')}"
+        for msg in history
+        if msg["role"] in ("user", "assistant")
+    )
+
+    client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+
+    try:
+        resp = client.chat.completions.create(
+            model=settings.DEFAULT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Summarize the following conversation concisely. "
+                    "Preserve key context, decisions, and technical details. "
+                    "Output as a single paragraph.",
+                },
+                {"role": "user", "content": conversation_text},
+            ],
+        )
+        summary = resp.choices[0].message.content or "Conversation summary unavailable."
+
+        # Replace history with a single user message containing the summary
+        history.clear()
+        history.append(
+            {
+                "role": "user",
+                "content": f"[Previous conversation summary]: {summary}",
+            }
+        )
+        print(f"History compacted. ({len(conversation_text)} chars -> {len(summary)} chars)")
+    except Exception as e:
+        print(f"Compact failed: {e}")
