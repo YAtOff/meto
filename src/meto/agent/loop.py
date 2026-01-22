@@ -57,7 +57,7 @@ Subagent pattern (context isolation via process spawning):
 """
 
 
-client = OpenAI(api_key=settings.LITELLM_API_KEY, base_url=settings.LITELLM_BASE_URL)
+client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
 def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:

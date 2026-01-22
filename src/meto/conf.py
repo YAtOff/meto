@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application settings configurable via environment variables and .env file.
 
     Environment variables must be prefixed with METO_.
-    Example: METO_LITELLM_API_KEY=your_api_key
+    Example: METO_LLM_API_KEY=your_api_key
     """
 
     model_config = SettingsConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
@@ -18,12 +18,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    LITELLM_API_KEY: str = Field(
+    LLM_API_KEY: str = Field(
         default="sk-<litellm-proxy-or-virtual-key>",
         description="API key for LiteLLM proxy",
     )
 
-    LITELLM_BASE_URL: str = Field(
+    LLM_BASE_URL: str = Field(
         default="http://localhost:4444",
         description="Base URL for LiteLLM proxy",
     )
