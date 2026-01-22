@@ -13,6 +13,8 @@ from typing import Annotated
 import typer
 from prompt_toolkit import prompt
 
+from meto.agent import run_agent_loop
+
 app = typer.Typer(add_completion=False)
 
 
@@ -35,7 +37,7 @@ def interactive_loop(prompt_text: str = ">>> ") -> None:
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
 
-        print(f"You said: {user_input}")
+        run_agent_loop(user_input)
 
 
 @app.callback(invoke_without_command=True)
@@ -44,16 +46,15 @@ def run(
         bool,
         typer.Option(
             "--stdin",
-            help="Read the prompt from stdin, print it, and exit.",
+            help="Read the prompt from stdin, run the agent loop with it, and exit.",
         ),
     ] = False,
 ) -> None:
     """Run meto."""
 
     if stdin:
-        text = sys.stdin.read()
-        text = _strip_single_trailing_newline(text)
-        print(f"You said: {text}")
+        text = _strip_single_trailing_newline(sys.stdin.read())
+        run_agent_loop(text)
         raise typer.Exit(code=0)
 
     interactive_loop()

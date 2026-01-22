@@ -41,6 +41,9 @@ classifiers = [
 dependencies = [
     "prompt-toolkit>=3.0.52",
     "typer>=0.21.1",
+    "pydantic-settings>=2.11.0",
+    "pydantic>=2.12.3",
+    "openai>=2.15.0",
 ]
 
 
