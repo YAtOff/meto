@@ -191,6 +191,37 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
+def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = False) -> str:
+    """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
+    if not pattern.strip():
+        return "Error: Empty search pattern"
+
+    try:
+        search_path = Path(path).expanduser().resolve()
+        if not search_path.exists():
+            return f"Error: Path does not exist: {path}"
+    except Exception as ex:
+        return f"Error accessing path '{path}': {ex}"
+
+    # Try ripgrep first, then grep, then Select-String
+    rg = shutil.which("rg")
+    if rg:
+        flag = "-i" if case_insensitive else ""
+        cmd = f'{rg} {flag} --line-number --no-heading "{pattern}" "{path}"'
+    else:
+        runner = _pick_shell_runner()
+        if runner and ("bash" in runner[0] or "sh" in runner[0]):
+            flag = "-i" if case_insensitive else ""
+            cmd = f'grep -R {flag} -n "{pattern}" "{path}" 2>/dev/null || true'
+        elif runner and ("powershell" in runner[0] or "pwsh" in runner[0]):
+            flag = "" if case_insensitive else "-CaseSensitive"
+            cmd = f'Select-String -Path "{path}\\*" -Pattern "{pattern}" {flag} | Select-Object -First 100'
+        else:
+            return "Error: No suitable search tool found (need rg, grep, or PowerShell)"
+
+    return _run_shell(cmd)
+
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -291,6 +322,37 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep_search",
+            "description": (
+                "Search for a text pattern in files within a directory. "
+                "Uses ripgrep (rg) if available, otherwise grep or Select-String. "
+                "Returns matching lines with file paths and line numbers."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "Text pattern to search for (supports regex).",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to search in (defaults to current directory).",
+                    },
+                    "case_insensitive": {
+                        "type": "boolean",
+                        "description": "Whether to ignore case when matching.",
+                        "default": False,
+                    },
+                },
+                "required": ["pattern"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
@@ -321,6 +383,13 @@ def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
         if settings.ECHO_COMMANDS:
             print(f"write_file: {path} ({len(content)} chars)")
         tool_output = _write_file(path, content)
+    elif tool_name == "grep_search":
+        pattern = parameters.get("pattern", "")
+        path = parameters.get("path", ".")
+        case_insensitive = parameters.get("case_insensitive", False)
+        if settings.ECHO_COMMANDS:
+            print(f"grep_search: '{pattern}' in {path} (case_insensitive={case_insensitive})")
+        tool_output = _run_grep_search(pattern, path, case_insensitive)
 
     if settings.ECHO_COMMANDS and tool_output:
         print(tool_output)

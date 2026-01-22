@@ -30,6 +30,7 @@ Rules:
 Available tools:
 - shell: Execute a shell command and return its output. Use it to inspect files, edit files, run tests, etc.
 - list_dir: List directory contents with structured output (names, types, sizes, timestamps).
+- grep_search: Search for text patterns in files (uses ripgrep/grep/Select-String).
 
 Shell patterns (PowerShell or bash):
 - List/search:
