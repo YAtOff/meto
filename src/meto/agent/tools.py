@@ -156,6 +156,25 @@ def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bo
     return "\n".join(lines)
 
 
+def _read_file(path: str) -> str:
+    """Read file contents with proper error handling."""
+    try:
+        file_path = Path(path).expanduser().resolve()
+        if not file_path.exists():
+            return f"Error: File does not exist: {path}"
+        if not file_path.is_file():
+            return f"Error: Not a file: {path}"
+
+        content = file_path.read_text(encoding="utf-8")
+        return _truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+    except UnicodeDecodeError:
+        return f"Error: Cannot decode file {path} as UTF-8 text"
+    except PermissionError:
+        return f"Error: Permission denied reading {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error reading file {path}: {ex}"
+
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -210,6 +229,27 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": (
+                "Read the contents of a file and return them as text. "
+                "Use this for reading configuration files, source code, or any text file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to read.",
+                    }
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
@@ -229,6 +269,11 @@ def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
         if settings.ECHO_COMMANDS:
             print(f"list_dir: {path} (recursive={recursive}, include_hidden={include_hidden})")
         tool_output = _list_directory(path, recursive, include_hidden)
+    elif tool_name == "read_file":
+        path = parameters.get("path", "")
+        if settings.ECHO_COMMANDS:
+            print(f"read_file: {path}")
+        tool_output = _read_file(path)
 
     if settings.ECHO_COMMANDS and tool_output:
         print(tool_output)
