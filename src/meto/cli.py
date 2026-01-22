@@ -14,6 +14,7 @@ import typer
 from prompt_toolkit import prompt
 
 from meto.agent import run_agent_loop
+from meto.agent.commands import handle_slash_command
 
 app = typer.Typer(add_completion=False)
 
@@ -37,6 +38,10 @@ def interactive_loop(prompt_text: str = ">>> ") -> None:
         except (EOFError, KeyboardInterrupt):
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
+
+        # Handle slash commands
+        if handle_slash_command(user_input, history):
+            continue
 
         run_agent_loop(user_input, history)
 
