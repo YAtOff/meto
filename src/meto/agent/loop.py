@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, cast
 
 from openai import OpenAI
 
+from meto.agent.log import ReasoningLogger
 from meto.agent.tools import AVAILABLE_TOOLS, TOOLS, run_tool
 from meto.conf import settings
 
@@ -75,6 +77,13 @@ def build_system_prompt() -> str:
     return "\n".join([prompt.rstrip(), "", begin, agents_text.rstrip(), end, ""])
 
 
+# --- Logging ---
+
+logger = logging.getLogger("agent")
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+
 client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
@@ -88,9 +97,11 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
     if not prompt.strip():
         return
 
+    reasoning_logger = ReasoningLogger()
+    reasoning_logger.log_user_input(prompt)
     history.append({"role": "user", "content": prompt})
 
-    for _ in range(settings.MAX_TURNS):
+    for _turn in range(settings.MAX_TURNS):
         # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
         # Our history is intentionally JSON-shaped, so treat these as dynamic.
         messages: Any = [
@@ -109,6 +120,9 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
         # `tool_calls` typing varies by model/SDK version; treat as dynamic.
         tool_calls: list[Any] = list(getattr(msg, "tool_calls", None) or [])
 
+        # Log model reasoning and response
+        reasoning_logger.log_model_response(resp, settings.DEFAULT_MODEL)
+
         assistant_message: dict[str, Any] = {
             "role": "assistant",
             "content": assistant_content,
@@ -121,6 +135,7 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
             print(assistant_content)
 
         if not tool_calls:
+            reasoning_logger.log_loop_completion("No more tool calls requested")
             return
 
         for tc in tool_calls:
@@ -143,15 +158,19 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
             try:
                 arguments_raw = getattr(fn, "arguments", None) or "{}"
                 arguments_any = json.loads(arguments_raw)
-            except (TypeError, json.JSONDecodeError):
+            except (TypeError, json.JSONDecodeError) as e:
                 arguments_any = {}
+                logger.error(
+                    f"[{reasoning_logger.session_id}] Failed to parse arguments for {fn_name}: {e}"
+                )
 
             if isinstance(arguments_any, dict):
                 arguments = cast(dict[str, Any], arguments_any)
             else:
                 arguments = {}
 
-            tool_output = run_tool(fn_name, arguments)
+            # Execute tool (logging happens inside run_tool)
+            tool_output = run_tool(fn_name, arguments, reasoning_logger)
 
             history.append(
                 {
@@ -161,4 +180,5 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
                 }
             )
 
+    reasoning_logger.log_loop_completion(f"Reached max turns ({settings.MAX_TURNS})")
     print(f"(stopped after {settings.MAX_TURNS} turns; consider increasing METO_MAX_TURNS)")

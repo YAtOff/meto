@@ -357,41 +357,39 @@ TOOLS: list[dict[str, Any]] = [
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
 
-def run_tool(tool_name: str, parameters: dict[str, Any]) -> str:
+def run_tool(tool_name: str, parameters: dict[str, Any], logger: Any | None = None) -> str:
     """Run a tool by name with given parameters."""
-    tool_output = ""
-    if tool_name == "shell":
-        command = parameters.get("command", "")
-        if settings.ECHO_COMMANDS:
-            print(f"$ {command}")
-        tool_output = _run_shell(command)
-    elif tool_name == "list_dir":
-        path = parameters.get("path", ".")
-        recursive = parameters.get("recursive", False)
-        include_hidden = parameters.get("include_hidden", False)
-        if settings.ECHO_COMMANDS:
-            print(f"list_dir: {path} (recursive={recursive}, include_hidden={include_hidden})")
-        tool_output = _list_directory(path, recursive, include_hidden)
-    elif tool_name == "read_file":
-        path = parameters.get("path", "")
-        if settings.ECHO_COMMANDS:
-            print(f"read_file: {path}")
-        tool_output = _read_file(path)
-    elif tool_name == "write_file":
-        path = parameters.get("path", "")
-        content = parameters.get("content", "")
-        if settings.ECHO_COMMANDS:
-            print(f"write_file: {path} ({len(content)} chars)")
-        tool_output = _write_file(path, content)
-    elif tool_name == "grep_search":
-        pattern = parameters.get("pattern", "")
-        path = parameters.get("path", ".")
-        case_insensitive = parameters.get("case_insensitive", False)
-        if settings.ECHO_COMMANDS:
-            print(f"grep_search: '{pattern}' in {path} (case_insensitive={case_insensitive})")
-        tool_output = _run_grep_search(pattern, path, case_insensitive)
+    if logger:
+        logger.log_tool_selection(tool_name, parameters)
 
-    if settings.ECHO_COMMANDS and tool_output:
-        print(_truncate(tool_output, settings.MAX_ECHO_CHARS))
+    tool_output = ""
+    try:
+        if tool_name == "shell":
+            command = parameters.get("command", "")
+            tool_output = _run_shell(command)
+        elif tool_name == "list_dir":
+            path = parameters.get("path", ".")
+            recursive = parameters.get("recursive", False)
+            include_hidden = parameters.get("include_hidden", False)
+            tool_output = _list_directory(path, recursive, include_hidden)
+        elif tool_name == "read_file":
+            path = parameters.get("path", "")
+            tool_output = _read_file(path)
+        elif tool_name == "write_file":
+            path = parameters.get("path", "")
+            content = parameters.get("content", "")
+            tool_output = _write_file(path, content)
+        elif tool_name == "grep_search":
+            pattern = parameters.get("pattern", "")
+            path = parameters.get("path", ".")
+            case_insensitive = parameters.get("case_insensitive", False)
+            tool_output = _run_grep_search(pattern, path, case_insensitive)
+
+        if logger:
+            logger.log_tool_execution(tool_name, tool_output, error=False)
+    except Exception as e:
+        tool_output = str(e)
+        if logger:
+            logger.log_tool_execution(tool_name, tool_output, error=True)
 
     return tool_output

@@ -1,6 +1,10 @@
 """Configuration management for LazyFS using Pydantic Settings."""
 
-from pydantic import Field
+import random
+from datetime import datetime
+from pathlib import Path
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -60,6 +64,27 @@ class Settings(BaseSettings):
         default=256,
         description="Maximum number of characters to print when echoing commands and outputs.",
     )
+
+    # --- Logging ---
+
+    LOG_DIR: Path = Field(
+        default=Path.home() / ".meto" / "logs",
+        description="Directory for agent reasoning trace logs.",
+    )
+
+    @property
+    def log_file(self) -> Path:
+        """Generate actual log file path with timestamp and random suffix."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
+        filename = f"agent_reasoning_{timestamp}_{random_suffix}.jsonl"
+        return self.LOG_DIR / filename
+
+    @field_validator("LOG_DIR")
+    @classmethod
+    def ensure_log_dir(cls, v: Path) -> Path:
+        v.mkdir(parents=True, exist_ok=True)
+        return v
 
 
 # Global settings instance
