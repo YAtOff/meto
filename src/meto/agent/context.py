@@ -3,6 +3,7 @@ Agent context dumping and serialization utilities for the agent loop.
 Provides methods to extract, format, and save conversation history.
 """
 
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -206,6 +207,54 @@ def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
         "total_tool_calls": total_tool_calls,
         "unique_tools_used": sorted(tools_used),
         "total_tokens_estimate": _estimate_tokens(history),
+        "project_instructions": _get_agents_md_metadata(),
+    }
+
+
+def _get_agents_md_metadata() -> dict[str, Any]:
+    """Return metadata about AGENTS.md in the current working directory.
+
+    This is intended for summaries/debugging only and MUST NOT include the file
+    contents.
+    """
+
+    agents_path = Path.cwd() / "AGENTS.md"
+
+    try:
+        stat = agents_path.stat()
+    except FileNotFoundError:
+        return {
+            "status": "missing",
+            "path": str(agents_path),
+        }
+    except OSError as e:
+        return {
+            "status": "unreadable",
+            "path": str(agents_path),
+            "error": str(e),
+        }
+
+    # Compute lines + sha256 prefix without returning the file body.
+    try:
+        raw = agents_path.read_bytes()
+        lines = raw.count(b"\n") + (1 if raw else 0)
+        sha256 = hashlib.sha256(raw).hexdigest()[:12]
+    except OSError as e:
+        return {
+            "status": "unreadable",
+            "path": str(agents_path),
+            "bytes": stat.st_size,
+            "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "error": str(e),
+        }
+
+    return {
+        "status": "present",
+        "path": str(agents_path),
+        "bytes": stat.st_size,
+        "lines": lines,
+        "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "sha256": sha256,
     }
 
 
@@ -249,5 +298,30 @@ def format_context_summary(history: list[dict[str, Any]]) -> str:
     lines.append(f"Tool calls:        {summary.get('total_tool_calls', 0)}")
     lines.append(f"Unique tools used: {tools_str}")
     lines.append(f"Token estimate:    {summary.get('total_tokens_estimate', 0)}")
+
+    project_instructions_raw = summary.get("project_instructions")
+    if isinstance(project_instructions_raw, dict):
+        project_instructions = cast(dict[str, Any], project_instructions_raw)
+        lines.append("")
+        lines.append("Project instructions (AGENTS.md):")
+
+        status = project_instructions.get("status", "unknown")
+        path = project_instructions.get("path", "")
+        status_str = status if isinstance(status, str) else str(status)
+        path_str = path if isinstance(path, str) else str(path)
+        lines.append(f"  - status:        {status_str}")
+        lines.append(f"  - path:          {path_str}")
+
+        if "bytes" in project_instructions:
+            lines.append(f"  - bytes:         {project_instructions.get('bytes')}")
+        if "lines" in project_instructions:
+            lines.append(f"  - lines:         {project_instructions.get('lines')}")
+        if "mtime" in project_instructions:
+            lines.append(f"  - mtime:         {project_instructions.get('mtime')}")
+        if "sha256" in project_instructions:
+            lines.append(f"  - sha256:        {project_instructions.get('sha256')}")
+        if "error" in project_instructions:
+            lines.append(f"  - error:         {project_instructions.get('error')}")
+
     lines.append("-" * 80)
     return "\n".join(lines)

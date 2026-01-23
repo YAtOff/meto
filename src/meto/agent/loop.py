@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any, cast
 
 from openai import OpenAI
@@ -18,7 +19,10 @@ from meto.conf import settings
 #   history in-module for a conversational experience.
 
 
-SYSTEM_PROMPT = f"""You are a CLI coding agent running at {os.getcwd()}.
+# Base system prompt template.
+# The final system prompt used for each model call is built by appending
+# project memory/user instructions from AGENTS.md (see build_system_prompt()).
+SYSTEM_PROMPT = """You are a CLI coding agent running at {cwd}.
 
 You can use tools to do real work: a shell command runner and a directory listing tool.
 
@@ -43,6 +47,34 @@ Subagent pattern (context isolation via process spawning):
 """
 
 
+def build_system_prompt() -> str:
+    """Build the system prompt.
+
+    Appends project memory/user instructions from AGENTS.md in the current
+    working directory.
+
+    Note: This intentionally does not cache; it re-reads AGENTS.md each call.
+    """
+
+    cwd = os.getcwd()
+    prompt = SYSTEM_PROMPT.format(cwd=cwd)
+
+    agents_path = Path(cwd) / "AGENTS.md"
+    begin = "----- BEGIN AGENTS.md (project instructions) -----"
+    end = "----- END AGENTS.md -----"
+
+    try:
+        agents_text = agents_path.read_text(encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        agents_text = f"[AGENTS.md missing at: {agents_path}]"
+    except OSError as e:
+        agents_text = f"[AGENTS.md unreadable at: {agents_path} — {e}]"
+
+    # Always include the delimiter block so the model reliably knows where the
+    # project memory starts/ends.
+    return "\n".join([prompt.rstrip(), "", begin, agents_text.rstrip(), end, ""])
+
+
 client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
@@ -62,7 +94,7 @@ def run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None:
         # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
         # Our history is intentionally JSON-shaped, so treat these as dynamic.
         messages: Any = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": build_system_prompt()},
             *history,
         ]
 
