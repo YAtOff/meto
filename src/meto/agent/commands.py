@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 import shlex
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -67,13 +67,20 @@ def cmd_quit(args: list[str], history: list[dict[str, Any]]) -> None:
 
 
 def cmd_export(args: list[str], history: list[dict[str, Any]]) -> None:
-    """Export conversation history to JSON."""
-    if len(args) > 1:
-        print("Usage: /export [file]")
+    """Export conversation history to a file."""
+    try:
+        export_target, export_format, include_system = _parse_export_args(args)
+    except ValueError as e:
+        print(str(e))
+        print("Usage: /export [path] [--format json|pretty_json|markdown|text] [--full]")
         return
 
-    filename = args[0] if args else ""
-    _export_history(history, filename)
+    _export_history(
+        history,
+        export_target,
+        export_format,
+        include_system=include_system,
+    )
 
 
 def cmd_compact(args: list[str], history: list[dict[str, Any]]) -> None:
@@ -93,8 +100,8 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     ),
     "/export": SlashCommandSpec(
         handler=cmd_export,
-        description="Export conversation to JSON",
-        usage="/export [file]",
+        description="Export conversation to a file (multiple formats)",
+        usage="/export [path] [--format json|pretty_json|markdown|text] [--full]",
     ),
     "/help": SlashCommandSpec(
         handler=cmd_help,
@@ -138,21 +145,125 @@ def handle_slash_command(user_input: str, history: list[dict[str, Any]]) -> bool
     return True
 
 
-def _export_history(history: list[dict[str, Any]], filename: str) -> None:
-    """Export conversation history to file (user/assistant/tool only)."""
+def _parse_export_args(args: list[str]) -> tuple[str, str, bool]:
+    """Parse /export arguments.
+
+    Supported forms:
+      /export
+      /export <path>
+      /export <path> <format>
+      /export [<path>] --format <format> [--full]
+
+    Notes:
+      - Default format is json
+      - Default is to EXCLUDE system messages unless --full is provided
+    """
+
+    supported_formats = {"json", "pretty_json", "markdown", "text"}
+    export_format = "json"
+    include_system = False
+    export_target = ""
+
+    # First, capture a positional path (if present) until we hit flags.
+    positionals: list[str] = []
+    i = 0
+    while i < len(args) and not args[i].startswith("-"):
+        positionals.append(args[i])
+        i += 1
+
+    # Remaining args are flags (and their values).
+    while i < len(args):
+        tok = args[i]
+
+        if tok in ("--full", "--include-system"):
+            include_system = True
+            i += 1
+            continue
+
+        if tok in ("--format", "-f"):
+            if i + 1 >= len(args):
+                raise ValueError("/export: missing value for --format")
+            candidate = args[i + 1]
+            if candidate not in supported_formats:
+                raise ValueError(f"/export: unsupported format: {candidate}")
+            export_format = candidate
+            i += 2
+            continue
+
+        raise ValueError(f"/export: unknown option: {tok}")
+
+    # Interpret positionals.
+    if len(positionals) == 0:
+        export_target = ""
+    elif len(positionals) == 1:
+        export_target = positionals[0]
+    elif len(positionals) == 2:
+        export_target = positionals[0]
+        candidate_format = positionals[1]
+        if candidate_format not in supported_formats:
+            raise ValueError(
+                "/export: second positional must be a format (json|pretty_json|markdown|text)"
+            )
+        export_format = candidate_format
+    else:
+        raise ValueError("/export: too many positional arguments")
+
+    return export_target, export_format, include_system
+
+
+def _export_history(
+    history: list[dict[str, Any]],
+    export_target: str,
+    export_format: str,
+    *,
+    include_system: bool,
+) -> None:
+    """Export conversation history to file.
+
+    By default exports user/assistant/tool messages only. If include_system is True,
+    system messages are included as well.
+    """
     import datetime
 
-    if not filename:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"meto_conversation_{timestamp}.json"
+    from meto.agent.context import save_agent_context
 
-    # Filter out system messages
-    export_data = [msg for msg in history if msg["role"] != "system"]
+    ext_by_format = {
+        "json": ".json",
+        "pretty_json": ".json",
+        "markdown": ".md",
+        "text": ".txt",
+    }
+    ext = ext_by_format.get(export_format, ".txt")
+
+    # Resolve path target:
+    # - empty => default filename in CWD
+    # - existing directory OR trailing slash => generate filename inside
+    # - file path without suffix => append inferred extension
+    if not export_target:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = Path(f"meto_conversation_{timestamp}{ext}")
+    else:
+        raw = export_target
+        is_directory_hint = raw.endswith("/") or raw.endswith("\\")
+        target_path = Path(raw)
+
+        if (target_path.exists() and target_path.is_dir()) or is_directory_hint:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"meto_conversation_{timestamp}{ext}"
+            filepath = target_path / filename
+        else:
+            filepath = target_path
+            if filepath.suffix == "":
+                filepath = filepath.with_suffix(ext)
 
     try:
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=2, ensure_ascii=False)
-        print(f"Exported to {filename}")
+        save_agent_context(
+            history,
+            filepath,
+            format=export_format,
+            include_system=include_system,
+        )
+        print(f"Exported to {filepath}")
     except Exception as e:
         print(f"Export failed: {e}")
 
