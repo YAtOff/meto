@@ -89,6 +89,17 @@ def cmd_compact(args: list[str], history: list[dict[str, Any]]) -> None:
     _compact_history(history)
 
 
+def cmd_context(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Show a multi-line context summary."""
+    if args:
+        print("Usage: /context")
+        return
+
+    from meto.agent.context import format_context_summary
+
+    print(format_context_summary(history))
+
+
 COMMANDS: dict[str, SlashCommandSpec] = {
     "/clear": SlashCommandSpec(
         handler=cmd_clear,
@@ -97,6 +108,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     "/compact": SlashCommandSpec(
         handler=cmd_compact,
         description="Summarize conversation to reduce token count",
+    ),
+    "/context": SlashCommandSpec(
+        handler=cmd_context,
+        description="Show a summary of the current context",
     ),
     "/export": SlashCommandSpec(
         handler=cmd_export,

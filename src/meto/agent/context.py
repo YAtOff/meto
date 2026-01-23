@@ -185,6 +185,7 @@ def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
     user_messages = [m for m in history if m.get("role") == "user"]
     assistant_messages = [m for m in history if m.get("role") == "assistant"]
     tool_messages = [m for m in history if m.get("role") == "tool"]
+    system_messages = [m for m in history if m.get("role") == "system"]
 
     total_tool_calls = sum(len(m.get("tool_calls", [])) for m in assistant_messages)
 
@@ -201,6 +202,7 @@ def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
         "user_messages": len(user_messages),
         "assistant_messages": len(assistant_messages),
         "tool_messages": len(tool_messages),
+        "system_messages": len(system_messages),
         "total_tool_calls": total_tool_calls,
         "unique_tools_used": sorted(tools_used),
         "total_tokens_estimate": _estimate_tokens(history),
@@ -211,3 +213,41 @@ def _estimate_tokens(history: list[dict[str, Any]]) -> int:
     """Rough estimate of token count (4 chars ≈ 1 token)."""
     total_chars = sum(len(str(m.get("content", ""))) for m in history)
     return max(1, total_chars // 4)
+
+
+def format_context_summary(history: list[dict[str, Any]]) -> str:
+    """Format a human-readable, multi-line context summary.
+
+    Intended for interactive surfaces (e.g., the REPL `/context` command).
+    The summary always reflects the full history as provided (including system
+    messages, if present).
+    """
+    summary = get_context_summary(history)
+
+    tools_raw = summary.get("unique_tools_used")
+    tools_list: list[str] = []
+    if isinstance(tools_raw, list):
+        for item in cast(list[object], tools_raw):
+            if isinstance(item, str):
+                tools_list.append(item)
+
+    tools_str = ", ".join(tools_list) if tools_list else "(none)"
+
+    # Keep formatting stable for easy copy/paste and grepping.
+    lines: list[str] = []
+    lines.append("Context summary")
+    lines.append("-" * 80)
+    lines.append(f"Timestamp:         {summary.get('timestamp', '')}")
+    lines.append(f"Total messages:    {summary.get('total_messages', 0)}")
+    lines.append("")
+    lines.append("By role:")
+    lines.append(f"  - system:        {summary.get('system_messages', 0)}")
+    lines.append(f"  - user:          {summary.get('user_messages', 0)}")
+    lines.append(f"  - assistant:     {summary.get('assistant_messages', 0)}")
+    lines.append(f"  - tool:          {summary.get('tool_messages', 0)}")
+    lines.append("")
+    lines.append(f"Tool calls:        {summary.get('total_tool_calls', 0)}")
+    lines.append(f"Unique tools used: {tools_str}")
+    lines.append(f"Token estimate:    {summary.get('total_tokens_estimate', 0)}")
+    lines.append("-" * 80)
+    return "\n".join(lines)
