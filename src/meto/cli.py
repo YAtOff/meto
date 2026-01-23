@@ -11,7 +11,8 @@ import sys
 from typing import Annotated, Any
 
 import typer
-from prompt_toolkit import prompt
+from prompt_toolkit import PromptSession
+from prompt_toolkit.enums import EditingMode
 
 from meto.agent import run_agent_loop
 from meto.agent.commands import handle_slash_command
@@ -32,9 +33,10 @@ def _strip_single_trailing_newline(text: str) -> str:
 
 def interactive_loop(prompt_text: str = ">>> ") -> None:
     history: list[dict[str, Any]] = []
+    session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
         try:
-            user_input = prompt(prompt_text)
+            user_input: str = session.prompt(prompt_text)
         except (EOFError, KeyboardInterrupt):
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
