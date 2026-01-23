@@ -10,7 +10,9 @@ from typing import Any
 
 import typer
 
-SlashCommandHandler = Callable[[list[str], list[dict[str, Any]]], None]
+from meto.agent.session import Session
+
+SlashCommandHandler = Callable[[list[str], Session], None]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -40,17 +42,16 @@ def _parse_slash_command_argv(text: str) -> list[str]:
     return list(lexer)
 
 
-def cmd_clear(args: list[str], history: list[dict[str, Any]]) -> None:
-    """Clear conversation history."""
+def cmd_clear(args: list[str], session: Session) -> None:
+    """Clear conversation history and start new session if persisting."""
     del args
-    history.clear()
+    session.clear()
     print("History cleared.")
 
 
-def cmd_help(args: list[str], history: list[dict[str, Any]]) -> None:
+def cmd_help(args: list[str], session: Session) -> None:
     """Show help for available commands."""
-    del args
-    del history
+    del args, session  # Unused
     print("Available commands:")
     for name in sorted(COMMANDS):
         spec = COMMANDS[name]
@@ -58,15 +59,14 @@ def cmd_help(args: list[str], history: list[dict[str, Any]]) -> None:
         print(f"  {usage:<15} - {spec.description}")
 
 
-def cmd_quit(args: list[str], history: list[dict[str, Any]]) -> None:
+def cmd_quit(args: list[str], session: Session) -> None:
     """Exit meto."""
-    del args
-    del history
+    del args, session  # Unused
     print("Goodbye!")
     raise typer.Exit(code=0)
 
 
-def cmd_export(args: list[str], history: list[dict[str, Any]]) -> None:
+def cmd_export(args: list[str], session: Session) -> None:
     """Export conversation history to a file."""
     try:
         export_target, export_format, include_system = _parse_export_args(args)
@@ -76,20 +76,21 @@ def cmd_export(args: list[str], history: list[dict[str, Any]]) -> None:
         return
 
     _export_history(
-        history,
+        session.history,
         export_target,
         export_format,
         include_system=include_system,
     )
 
 
-def cmd_compact(args: list[str], history: list[dict[str, Any]]) -> None:
+def cmd_compact(args: list[str], session: Session) -> None:
     """Summarize conversation history to reduce token count."""
     del args
-    _compact_history(history)
+    _compact_history(session.history)
+    session.renew()
 
 
-def cmd_context(args: list[str], history: list[dict[str, Any]]) -> None:
+def cmd_context(args: list[str], session: Session) -> None:
     """Show a multi-line context summary."""
     if args:
         print("Usage: /context")
@@ -97,7 +98,7 @@ def cmd_context(args: list[str], history: list[dict[str, Any]]) -> None:
 
     from meto.agent.context import format_context_summary
 
-    print(format_context_summary(history))
+    print(format_context_summary(session.history))
 
 
 COMMANDS: dict[str, SlashCommandSpec] = {
@@ -129,7 +130,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
 }
 
 
-def handle_slash_command(user_input: str, history: list[dict[str, Any]]) -> bool:
+def handle_slash_command(
+    user_input: str,
+    session: Session,
+) -> bool:
     """Handle slash commands. Returns True if command was handled."""
     candidate = user_input.lstrip()
     if not candidate.startswith("/"):
@@ -156,7 +160,7 @@ def handle_slash_command(user_input: str, history: list[dict[str, Any]]) -> bool
         print(f"Unknown command: {command}")
         return True
 
-    spec.handler(args, history)
+    spec.handler(args, session)
     return True
 
 

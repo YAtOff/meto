@@ -52,7 +52,6 @@ Environment variables (`.env` supported):
 - `METO_MAX_TURNS` - Max iterations (default: 25)
 - `METO_TOOL_TIMEOUT_SECONDS` - Shell timeout (default: 300)
 - `METO_MAX_TOOL_OUTPUT_CHARS` - Max output (default: 50000)
-- `METO_ECHO_COMMANDS` - Show commands (default: true)
 
 ### Key Implementation Details
 - History kept in-module for interactive mode (conversational)

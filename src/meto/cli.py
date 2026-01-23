@@ -8,7 +8,8 @@ Running modes:
 from __future__ import annotations
 
 import sys
-from typing import Annotated, Any
+from datetime import datetime
+from typing import Annotated
 
 import typer
 from prompt_toolkit import PromptSession
@@ -16,6 +17,7 @@ from prompt_toolkit.enums import EditingMode
 
 from meto.agent import run_agent_loop
 from meto.agent.commands import handle_slash_command
+from meto.agent.session import Session, get_session_info, list_session_files
 
 app = typer.Typer(add_completion=False)
 
@@ -31,21 +33,23 @@ def _strip_single_trailing_newline(text: str) -> str:
     return text
 
 
-def interactive_loop(prompt_text: str = ">>> ") -> None:
-    history: list[dict[str, Any]] = []
-    session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
+def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) -> None:
+    if session is None:
+        session = Session()
+
+    prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
         try:
-            user_input: str = session.prompt(prompt_text)
+            user_input: str = prompt_session.prompt(prompt_text)
         except (EOFError, KeyboardInterrupt):
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
 
         # Handle slash commands
-        if handle_slash_command(user_input, history):
+        if handle_slash_command(user_input, session):
             continue
 
-        run_agent_loop(user_input, history)
+        run_agent_loop(user_input, session)
 
 
 @app.callback(invoke_without_command=True)
@@ -57,15 +61,45 @@ def run(
             help="Read the prompt from stdin, run the agent loop with it, and exit.",
         ),
     ] = False,
+    session_id: Annotated[
+        str | None,
+        typer.Option(
+            "--session",
+            help="Resume session by ID (format: timestamp-randomsuffix)",
+        ),
+    ] = None,
 ) -> None:
     """Run meto."""
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        run_agent_loop(text, [])
+        agent_session = Session(session_id) if session_id else Session()
+        run_agent_loop(text, agent_session)
         raise typer.Exit(code=0)
 
-    interactive_loop()
+    interactive_loop(session=Session(session_id) if session_id else None)
+
+
+@app.command()
+def sessions(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-n", help="Max sessions to show"),
+    ] = 10,
+) -> None:
+    """List available sessions."""
+    session_files = list_session_files()[:limit]
+
+    if not session_files:
+        print("No sessions found.")
+        return
+
+    print(f"{'Session ID':<30} {'Created':<20} {'Messages':<10} {'Size':<10}")
+    print("-" * 75)
+    for path in session_files:
+        info = get_session_info(path)
+        created = datetime.fromisoformat(info["created"]).strftime("%Y-%m-%d %H:%M:%S")
+        print(f"{info['id']:<30} {created:<20} {info['message_count']:<10} {info['size']:<10}")
 
 
 def main() -> None:

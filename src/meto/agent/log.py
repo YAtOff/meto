@@ -2,7 +2,6 @@ import json
 import logging
 from datetime import UTC, datetime
 from typing import Any, override
-from uuid import uuid4
 
 from rich.console import Console
 
@@ -32,8 +31,8 @@ class ReasoningLogger:
     turn_count: int
     console: Console
 
-    def __init__(self, session_id: str | None = None) -> None:
-        self.session_id = session_id or str(uuid4())
+    def __init__(self, session_id: str) -> None:
+        self.session_id = session_id
         self.turn_count = 0
         self.console = Console(stderr=True)
 

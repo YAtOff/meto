@@ -55,16 +55,6 @@ class Settings(BaseSettings):
         description="Maximum number of characters captured from a tool result.",
     )
 
-    ECHO_COMMANDS: bool = Field(
-        default=True,
-        description="Whether to print executed shell commands and their outputs.",
-    )
-
-    MAX_ECHO_CHARS: int = Field(
-        default=256,
-        description="Maximum number of characters to print when echoing commands and outputs.",
-    )
-
     # --- Logging ---
 
     LOG_DIR: Path = Field(
