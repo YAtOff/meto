@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="METO_",
         case_sensitive=False,
+        extra="ignore",
     )
 
     LLM_API_KEY: str = Field(

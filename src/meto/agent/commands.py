@@ -2,50 +2,140 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import shlex
+from collections.abc import Callable
 from typing import Any
 
 import typer
 
+SlashCommandHandler = Callable[[list[str], list[dict[str, Any]]], None]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SlashCommandSpec:
+    handler: SlashCommandHandler
+    description: str
+    usage: str | None = None
+
+
+def _parse_slash_command_argv(text: str) -> list[str]:
+    """Parse a slash command into argv tokens.
+
+    We aim for a `sys.argv`-like experience:
+    - Quotes group tokens (e.g. /export "my file.json")
+    - `#` is NOT treated as a comment
+    - Backslashes are preserved (important for Windows paths)
+    """
+
+    # We intentionally avoid `shlex.split(..., posix=False)` because it tends to
+    # preserve quotes as literal characters. We also disable escaping because
+    # backslashes are common in Windows paths and should not be treated as
+    # escape sequences.
+    lexer = shlex.shlex(text, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    lexer.escape = ""
+    return list(lexer)
+
+
+def cmd_clear(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Clear conversation history."""
+    del args
+    history.clear()
+    print("History cleared.")
+
+
+def cmd_help(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Show help for available commands."""
+    del args
+    del history
+    print("Available commands:")
+    for name in sorted(COMMANDS):
+        spec = COMMANDS[name]
+        usage = spec.usage or name
+        print(f"  {usage:<15} - {spec.description}")
+
+
+def cmd_quit(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Exit meto."""
+    del args
+    del history
+    print("Goodbye!")
+    raise typer.Exit(code=0)
+
+
+def cmd_export(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Export conversation history to JSON."""
+    if len(args) > 1:
+        print("Usage: /export [file]")
+        return
+
+    filename = args[0] if args else ""
+    _export_history(history, filename)
+
+
+def cmd_compact(args: list[str], history: list[dict[str, Any]]) -> None:
+    """Summarize conversation history to reduce token count."""
+    del args
+    _compact_history(history)
+
+
+COMMANDS: dict[str, SlashCommandSpec] = {
+    "/clear": SlashCommandSpec(
+        handler=cmd_clear,
+        description="Clear conversation history",
+    ),
+    "/compact": SlashCommandSpec(
+        handler=cmd_compact,
+        description="Summarize conversation to reduce token count",
+    ),
+    "/export": SlashCommandSpec(
+        handler=cmd_export,
+        description="Export conversation to JSON",
+        usage="/export [file]",
+    ),
+    "/help": SlashCommandSpec(
+        handler=cmd_help,
+        description="Show this help",
+    ),
+    "/quit": SlashCommandSpec(
+        handler=cmd_quit,
+        description="Exit meto",
+    ),
+}
+
 
 def handle_slash_command(user_input: str, history: list[dict[str, Any]]) -> bool:
     """Handle slash commands. Returns True if command was handled."""
-    if not user_input.startswith("/"):
+    candidate = user_input.lstrip()
+    if not candidate.startswith("/"):
         return False
 
-    parts = user_input.split(maxsplit=1)
-    command = parts[0]
-    args = parts[1] if len(parts) > 1 else ""
+    try:
+        argv = _parse_slash_command_argv(candidate)
+    except ValueError as e:
+        print(f"Command parse error: {e}")
+        return True
 
-    if command == "/clear":
-        history.clear()
-        print("History cleared.")
-        return True
-    elif command == "/help":
-        _print_help()
-        return True
-    elif command == "/quit":
-        print("Goodbye!")
-        raise typer.Exit(code=0)
-    elif command == "/export":
-        _export_history(history, args)
-        return True
-    elif command == "/compact":
-        _compact_history(history)
-        return True
-    else:
+    if not argv:
+        return False
+
+    command = argv[0]
+    args = argv[1:]
+
+    # Decision: explicit empty args (e.g. /export "") behave like no args.
+    if args == [""]:
+        args = []
+
+    spec = COMMANDS.get(command)
+    if spec is None:
         print(f"Unknown command: {command}")
         return True
 
-
-def _print_help() -> None:
-    """Print available commands."""
-    print("Available commands:")
-    print("  /clear          - Clear conversation history")
-    print("  /compact        - Summarize conversation to reduce token count")
-    print("  /export [file]  - Export conversation to JSON")
-    print("  /help           - Show this help")
-    print("  /quit           - Exit meto")
+    spec.handler(args, history)
+    return True
 
 
 def _export_history(history: list[dict[str, Any]], filename: str) -> None:
