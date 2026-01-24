@@ -2,93 +2,21 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-from pathlib import Path
 from typing import Any, cast
 
 from openai import OpenAI
 
 from meto.agent.log import ReasoningLogger
+from meto.agent.prompt import build_system_prompt
 from meto.agent.session import Session
 from meto.agent.tools import AVAILABLE_TOOLS, TOOLS, run_tool
 from meto.conf import settings
 
-# Core idea:
-#   ONE tool (shell) + ONE loop (tool-calling) => a capable coding agent.
-#
-# Notes:
-# - We keep the public API minimal: `run_agent_loop(prompt: str, history: list[dict[str, Any]]) -> None`.
-# - Interactive mode (meto with no args) runs in a single process, so we keep
-#   history in-module for a conversational experience.
-
-
-# Base system prompt template.
-# The final system prompt used for each model call is built by appending
-# project memory/user instructions from AGENTS.md (see build_system_prompt()).
-SYSTEM_PROMPT = """You are a CLI coding agent running at {cwd}.
-
-You can use tools to do real work: a shell command runner and a directory listing tool.
-
-Rules:
-- Prefer acting via the tools over long explanations.
-- When you need file context, read it using shell commands (don't guess).
-- Keep outputs succinct; summarize what you learned.
-
-Subagent pattern (context isolation via process spawning):
-- For complex, self-contained subtasks, run a subagent by calling this tool to execute:
-        meto --one-shot
-    and pass it a prompt via stdin.
-    - PowerShell (here-string):
-            @'
-            <task>
-            '@ | meto --one-shot
-    - bash (heredoc):
-        meto --one-shot <<'EOF'
-        <task>
-        EOF
-    The subagent runs with fresh history and returns a summary.
-"""
-
-
-def build_system_prompt() -> str:
-    """Build the system prompt.
-
-    Appends project memory/user instructions from AGENTS.md in the current
-    working directory.
-
-    Note: This intentionally does not cache; it re-reads AGENTS.md each call.
-    """
-
-    cwd = os.getcwd()
-    prompt = SYSTEM_PROMPT.format(cwd=cwd)
-
-    agents_path = Path(cwd) / "AGENTS.md"
-    begin = "----- BEGIN AGENTS.md (project instructions) -----"
-    end = "----- END AGENTS.md -----"
-
-    try:
-        agents_text = agents_path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        agents_text = f"[AGENTS.md missing at: {agents_path}]"
-    except OSError as e:
-        agents_text = f"[AGENTS.md unreadable at: {agents_path} — {e}]"
-
-    # Always include the delimiter block so the model reliably knows where the
-    # project memory starts/ends.
-    return "\n".join([prompt.rstrip(), "", begin, agents_text.rstrip(), end, ""])
-
-
-# --- Logging ---
-
 logger = logging.getLogger("agent")
-logger.setLevel(logging.INFO)
-logger.propagate = False
-
-
 client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
-def run_agent_loop(prompt: str, session: Session) -> None:
+def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> None:
     """Run the agent loop for a single user prompt.
 
     In interactive mode, this function is called repeatedly and shares module
@@ -98,7 +26,7 @@ def run_agent_loop(prompt: str, session: Session) -> None:
     if not prompt.strip():
         return
 
-    reasoning_logger = ReasoningLogger(session.session_id)
+    reasoning_logger = ReasoningLogger(session.session_id, agent_name)
     reasoning_logger.log_user_input(prompt)
     session.history.append({"role": "user", "content": prompt})
     session.session_logger.log_user(prompt)

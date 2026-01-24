@@ -7,6 +7,8 @@ from typing import Any
 
 from meto.conf import settings
 
+# Utils
+
 
 def _pick_shell_runner() -> list[str] | None:
     """Pick an available shell runner.
@@ -36,7 +38,24 @@ def _truncate(text: str, limit: int) -> str:
     return text[:limit] + f"\n... (truncated to {limit} chars)"
 
 
+def _format_size(size: float) -> str:
+    """Format file size in human-readable format."""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+# Tool implementations
+
+
 def _run_shell(command: str) -> str:
+    """Execute a shell command and return combined stdout/stderr.
+
+    The command is executed via an available shell runner (bash preferred, then
+    PowerShell) and is subject to the configured timeout/output truncation.
+    """
     if not command.strip():
         return "(empty command)"
 
@@ -70,15 +89,6 @@ def _run_shell(command: str) -> str:
     if not output:
         output = "(empty)"
     return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
-
-
-def _format_size(size: float) -> str:
-    """Format file size in human-readable format."""
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024:
-            return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TB"
 
 
 def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:

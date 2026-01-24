@@ -1,4 +1,4 @@
-"""Configuration management for LazyFS using Pydantic Settings."""
+"""Configuration management for meto using Pydantic Settings."""
 
 import random
 from datetime import datetime
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     LLM_API_KEY: str = Field(
-        default="sk-<litellm-proxy-or-virtual-key>",
+        default="",
         description="API key for LiteLLM proxy",
     )
 
@@ -54,6 +54,17 @@ class Settings(BaseSettings):
         default=50000,
         description="Maximum number of characters captured from a tool result.",
     )
+
+    SESSION_DIR: Path = Field(
+        default=Path.home() / ".meto" / "sessions",
+        description="Directory to store session files.",
+    )
+
+    @field_validator("SESSION_DIR")
+    @classmethod
+    def ensure_session_dir(cls, v: Path) -> Path:
+        v.mkdir(parents=True, exist_ok=True)
+        return v
 
     # --- Logging ---
 

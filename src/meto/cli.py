@@ -1,9 +1,4 @@
-"""Command-line interface for meto.
-
-Running modes:
-- No args: starts interactive mode.
-- --one-shot: reads the prompt from stdin, prints it, and exits.
-"""
+"""Command-line interface for meto"""
 
 from __future__ import annotations
 
@@ -54,6 +49,7 @@ def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) 
 
 @app.callback(invoke_without_command=True)
 def run(
+    ctx: typer.Context,
     one_shot: Annotated[
         bool,
         typer.Option(
@@ -70,6 +66,13 @@ def run(
     ] = None,
 ) -> None:
     """Run meto."""
+
+    # Typer (Click) always invokes the callback, even when a subcommand is
+    # provided. `invoke_without_command=True` only controls whether the callback
+    # runs when *no* subcommand is given. Guard here to avoid accidentally
+    # starting interactive mode when the user is running a subcommand.
+    if ctx.invoked_subcommand is not None:
+        return
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())

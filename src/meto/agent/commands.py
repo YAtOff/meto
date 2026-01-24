@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import shlex
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import typer
+from openai import OpenAI
 
+from meto.agent.context import format_context_summary, save_agent_context
 from meto.agent.session import Session
+from meto.conf import settings
 
 SlashCommandHandler = Callable[[list[str], Session], None]
 
@@ -95,9 +99,6 @@ def cmd_context(args: list[str], session: Session) -> None:
     if args:
         print("Usage: /context")
         return
-
-    from meto.agent.context import format_context_summary
-
     print(format_context_summary(session.history))
 
 
@@ -242,10 +243,6 @@ def _export_history(
     By default exports user/assistant/tool messages only. If include_system is True,
     system messages are included as well.
     """
-    import datetime
-
-    from meto.agent.context import save_agent_context
-
     ext_by_format = {
         "json": ".json",
         "pretty_json": ".json",
@@ -293,10 +290,6 @@ def _compact_history(history: list[dict[str, Any]]) -> None:
     Uses LLM to create a concise summary of the conversation,
     then replaces the history with just the summary.
     """
-    from openai import OpenAI
-
-    from meto.conf import settings
-
     if not history:
         print("No history to compact.")
         return

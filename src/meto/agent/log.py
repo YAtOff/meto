@@ -8,6 +8,8 @@ from rich.console import Console
 from meto.conf import settings
 
 logger = logging.getLogger("agent")
+logger.setLevel(logging.INFO)
+logger.propagate = False
 
 
 class JSONFormatter(logging.Formatter):
@@ -28,11 +30,15 @@ class ReasoningLogger:
     """Structured logging for agent reasoning with JSON file + colored stderr."""
 
     session_id: str
+    agent_name: str
+    agent_run_id: str
     turn_count: int
     console: Console
 
-    def __init__(self, session_id: str) -> None:
+    def __init__(self, session_id: str, agent_name: str, agent_run_id: str | None = None) -> None:
         self.session_id = session_id
+        self.agent_name = agent_name
+        self.agent_run_id = agent_run_id or str(datetime.now().timestamp())
         self.turn_count = 0
         self.console = Console(stderr=True)
 
@@ -43,7 +49,12 @@ class ReasoningLogger:
 
     def _log(self, level: int, msg: str, **kwargs: Any) -> None:
         """Internal log method that adds session context."""
-        extra = {"session_id": self.session_id, **kwargs}
+        extra = {
+            "session_id": self.session_id,
+            "agent_name": self.agent_name,
+            "agent_run_id": self.agent_run_id,
+            **kwargs,
+        }
         logger.log(level, msg, extra=extra)
 
     def log_user_input(self, prompt: str):

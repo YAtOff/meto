@@ -32,7 +32,9 @@ class SessionLogger:
     _lock: threading.Lock
     _console: Console
 
-    def __init__(self, session_id: str | None = None, session_dir: Path = settings.LOG_DIR) -> None:
+    def __init__(
+        self, session_id: str | None = None, session_dir: Path = settings.SESSION_DIR
+    ) -> None:
         self.session_id = session_id or generate_session_id()
         self.session_file = session_dir / f"session-{self.session_id}.jsonl"
         self._lock = threading.Lock()
@@ -82,7 +84,7 @@ class SessionLogger:
         self._append(msg)
 
 
-def load_session(session_id: str, session_dir: Path = settings.LOG_DIR) -> list[dict[str, Any]]:
+def load_session(session_id: str, session_dir: Path = settings.SESSION_DIR) -> list[dict[str, Any]]:
     """Load conversation history from session file.
 
     Returns OpenAI-style history list (no timestamps/session_id wrapper).
@@ -112,7 +114,7 @@ def load_session(session_id: str, session_dir: Path = settings.LOG_DIR) -> list[
     return messages
 
 
-def list_session_files(session_dir: Path = settings.LOG_DIR) -> list[Path]:
+def list_session_files(session_dir: Path = settings.SESSION_DIR) -> list[Path]:
     """Return list of session-*.jsonl files, sorted by mtime (newest first)."""
     pattern = "session-*.jsonl"
     if not session_dir.exists():
