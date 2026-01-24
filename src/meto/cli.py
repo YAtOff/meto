@@ -29,6 +29,7 @@ def _strip_single_trailing_newline(text: str) -> str:
 
 
 def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) -> None:
+    """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
         session = Session()
 
@@ -41,9 +42,16 @@ def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) 
             return
 
         # Handle slash commands
-        if handle_slash_command(user_input, session):
+        was_handled, custom_prompt = handle_slash_command(user_input, session)
+
+        if was_handled:
+            # If custom command provided a prompt, run agent loop with it
+            if custom_prompt:
+                run_agent_loop(custom_prompt, session)
+            # Otherwise, built-in command was executed, continue to next iteration
             continue
 
+        # No slash command, run agent loop with user input
         run_agent_loop(user_input, session)
 
 

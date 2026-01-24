@@ -1,9 +1,29 @@
-"""Slash commands for interactive mode."""
+"""Slash commands for interactive mode.
+
+Built-in commands are registered in the COMMANDS dict.
+
+Custom commands can be defined as Markdown files in $PWD/.meto/commands/{command}.md.
+When an unknown slash command is entered, the corresponding .md file is searched
+for and, if found, its contents are used as a prompt for the agent loop.
+
+Custom command files:
+- Must be named {command}.md (e.g., code-review.md)
+- Must be located in $PWD/.meto/commands/
+- Should contain the prompt text to be sent to the agent
+- Can receive arguments, which are appended to the prompt as:
+  [Command arguments: arg1 arg2 ...]
+
+Command precedence:
+1. Built-in commands (always take precedence)
+2. Custom commands (if file exists)
+3. Unknown command error
+"""
 
 from __future__ import annotations
 
 import dataclasses
 import datetime
+import re
 import shlex
 from collections.abc import Callable
 from pathlib import Path
@@ -44,6 +64,103 @@ def _parse_slash_command_argv(text: str) -> list[str]:
     lexer.commenters = ""
     lexer.escape = ""
     return list(lexer)
+
+
+def _validate_command_name(command: str) -> str:
+    """Validate and sanitize command name.
+
+    Prevents path traversal and ensures valid filename.
+
+    Args:
+        command: Command string (may or may not start with /)
+
+    Returns:
+        Sanitized command name without leading slash
+
+    Raises:
+        ValueError: If command name contains invalid characters
+    """
+    # Remove leading slash
+    name = command.lstrip("/")
+
+    # Prevent path traversal
+    if ".." in name or "/" in name or "\\" in name:
+        raise ValueError(f"Invalid command name: {command}")
+
+    # Allow only alphanumeric, hyphen, underscore
+    if not re.match(r"^[a-zA-Z0-9_-]+$", name):
+        raise ValueError(f"Invalid command name: {command}")
+
+    return name
+
+
+def _find_custom_command_file(command: str) -> Path | None:
+    """Search for custom command file in $PWD/.meto/commands/{command}.md.
+
+    Args:
+        command: Command string (may or may not start with /)
+
+    Returns:
+        Path to command file if it exists, None otherwise
+    """
+    try:
+        command_name = _validate_command_name(command)
+    except ValueError:
+        return None
+
+    # Construct path: $PWD/.meto/commands/{command}.md
+    command_path = Path.cwd() / ".meto" / "commands" / f"{command_name}.md"
+
+    return command_path if command_path.is_file() else None
+
+
+def _load_custom_command_prompt(command_path: Path) -> str:
+    """Load and return contents of custom command file.
+
+    Args:
+        command_path: Path to the custom command .md file
+
+    Returns:
+        File contents as string
+
+    Raises:
+        ValueError: If file cannot be read
+    """
+    try:
+        return command_path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise ValueError(f"Failed to read custom command file: {e}") from e
+    except UnicodeDecodeError as e:
+        raise ValueError(f"Failed to decode custom command file: {e}") from e
+
+
+def _execute_custom_command(
+    args: list[str],
+    command_path: Path,
+    session: Session,
+) -> str:
+    """Execute custom command by loading file content and appending arguments.
+
+    Args:
+        args: Command arguments (if any)
+        command_path: Path to the custom command .md file
+        session: Session instance (for potential future use)
+
+    Returns:
+        Prompt string to pass to agent loop
+
+    Raises:
+        ValueError: If file cannot be loaded
+    """
+    del session  # Unused for now, reserved for future use
+    base_prompt = _load_custom_command_prompt(command_path)
+
+    # If args provided, append them to the prompt
+    if args:
+        args_text = " ".join(shlex.quote(arg) for arg in args)
+        return f"{base_prompt}\n\n[Command arguments: {args_text}]"
+
+    return base_prompt
 
 
 def cmd_clear(args: list[str], session: Session) -> None:
@@ -144,20 +261,31 @@ COMMANDS: dict[str, SlashCommandSpec] = {
 def handle_slash_command(
     user_input: str,
     session: Session,
-) -> bool:
-    """Handle slash commands. Returns True if command was handled."""
+) -> tuple[bool, str | None]:
+    """Handle slash commands.
+
+    Args:
+        user_input: Raw user input
+        session: Session instance
+
+    Returns:
+        Tuple of (was_handled, custom_prompt):
+        - was_handled: True if command was processed (built-in or custom)
+        - custom_prompt: If custom command executed, contains prompt for agent loop;
+          None for built-in commands or errors
+    """
     candidate = user_input.lstrip()
     if not candidate.startswith("/"):
-        return False
+        return False, None
 
     try:
         argv = _parse_slash_command_argv(candidate)
     except ValueError as e:
         print(f"Command parse error: {e}")
-        return True
+        return True, None
 
     if not argv:
-        return False
+        return False, None
 
     command = argv[0]
     args = argv[1:]
@@ -166,13 +294,25 @@ def handle_slash_command(
     if args == [""]:
         args = []
 
+    # Check built-in commands first
     spec = COMMANDS.get(command)
-    if spec is None:
-        print(f"Unknown command: {command}")
-        return True
+    if spec is not None:
+        spec.handler(args, session)
+        return True, None
 
-    spec.handler(args, session)
-    return True
+    # Check for custom command file
+    custom_command_path = _find_custom_command_file(command)
+    if custom_command_path is not None:
+        try:
+            custom_prompt = _execute_custom_command(args, custom_command_path, session)
+            return True, custom_prompt
+        except ValueError as e:
+            print(f"Custom command error: {e}")
+            return True, None
+
+    # Unknown command
+    print(f"Unknown command: {command}")
+    return True, None
 
 
 def _parse_export_args(args: list[str]) -> tuple[str, str, bool]:
