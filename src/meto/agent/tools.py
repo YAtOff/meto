@@ -249,6 +249,21 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
     return _run_shell(cmd)
 
 
+def _fetch(url: str, max_bytes: int = 100000) -> str:
+    """Fetch URL via HTTP GET, return response body as text (truncated)."""
+    from urllib.error import URLError
+    from urllib.request import urlopen
+
+    try:
+        with urlopen(url, timeout=10) as resp:
+            data = resp.read(max_bytes + 1)
+            return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
+    except URLError as e:
+        return f"Error fetching {url}: {e}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error fetching {url}: {ex}"
+
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -383,6 +398,31 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "fetch",
+            "description": (
+                "Fetch web resources via HTTP GET. Returns response body as text. "
+                "Handles redirects automatically."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to fetch",
+                    },
+                    "max_bytes": {
+                        "type": "integer",
+                        "description": "Max response bytes (default: 100000)",
+                    },
+                },
+                "required": ["url"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "manage_tasks",
             "description": (
                 "Update the task list. Use to plan and track progress on multi-step tasks. "
@@ -457,6 +497,10 @@ def run_tool(
             path = parameters.get("path", ".")
             case_insensitive = parameters.get("case_insensitive", False)
             tool_output = _run_grep_search(pattern, path, case_insensitive)
+        elif tool_name == "fetch":
+            url = parameters.get("url", "")
+            max_bytes = parameters.get("max_bytes", 100000)
+            tool_output = _fetch(url, max_bytes)
         elif tool_name == "manage_tasks":
             if session is None:
                 tool_output = "Error: session required for manage_tasks"
