@@ -103,7 +103,7 @@ def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> N
                 arguments = {}
 
             # Execute tool (logging happens inside run_tool)
-            tool_output = run_tool(fn_name, arguments, reasoning_logger)
+            tool_output = run_tool(fn_name, arguments, reasoning_logger, session)
 
             session.history.append(
                 {

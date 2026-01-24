@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from meto.agent.session import Session
 from meto.conf import settings
 
 # Utils
@@ -201,6 +202,22 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
+def _manage_tasks(session: Session, items: list[dict[str, Any]]) -> str:
+    """Update the task list for a session.
+
+    Args:
+        session: The session containing the TaskManager
+        items: Complete new task list (replaces existing)
+
+    Returns:
+        Rendered view of the task list
+    """
+    try:
+        return session.tasks.update(items)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = False) -> str:
     """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
     if not pattern.strip():
@@ -363,11 +380,57 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_tasks",
+            "description": (
+                "Update the task list. Use to plan and track progress on multi-step tasks. "
+                "Mark tasks in_progress before starting, completed when done. "
+                "Only ONE task can be in_progress at a time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "Complete list of tasks (replaces existing)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content": {
+                                    "type": "string",
+                                    "description": "Task description",
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed"],
+                                    "description": "Task status",
+                                },
+                                "activeForm": {
+                                    "type": "string",
+                                    "description": "Present tense action, e.g. 'Reading files'",
+                                },
+                            },
+                            "required": ["content", "status", "activeForm"],
+                        },
+                    }
+                },
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
 
-def run_tool(tool_name: str, parameters: dict[str, Any], logger: Any | None = None) -> str:
+def run_tool(
+    tool_name: str,
+    parameters: dict[str, Any],
+    logger: Any | None = None,
+    session: Session | None = None,
+) -> str:
     """Run a tool by name with given parameters."""
     if logger:
         logger.log_tool_selection(tool_name, parameters)
@@ -394,6 +457,12 @@ def run_tool(tool_name: str, parameters: dict[str, Any], logger: Any | None = No
             path = parameters.get("path", ".")
             case_insensitive = parameters.get("case_insensitive", False)
             tool_output = _run_grep_search(pattern, path, case_insensitive)
+        elif tool_name == "manage_tasks":
+            if session is None:
+                tool_output = "Error: session required for manage_tasks"
+            else:
+                items = parameters.get("items", [])
+                tool_output = _manage_tasks(session, items)
 
         if logger:
             logger.log_tool_execution(tool_name, tool_output, error=False)
