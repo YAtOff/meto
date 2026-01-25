@@ -10,8 +10,9 @@ import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 
-from meto.agent import run_agent_loop
+from meto.agent.agent import Agent
 from meto.agent.commands import handle_slash_command
+from meto.agent.loop import run_agent_loop
 from meto.agent.session import Session, get_session_info, list_session_files
 
 app = typer.Typer(add_completion=False)
@@ -33,6 +34,8 @@ def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) 
     if session is None:
         session = Session()
 
+    agent = Agent.main(session)
+
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
         try:
@@ -47,12 +50,14 @@ def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) 
         if was_handled:
             # If custom command provided a prompt, run agent loop with it
             if custom_prompt:
-                run_agent_loop(custom_prompt, session)
+                for output in run_agent_loop(custom_prompt, agent):
+                    print(output)
             # Otherwise, built-in command was executed, continue to next iteration
             continue
 
         # No slash command, run agent loop with user input
-        run_agent_loop(user_input, session)
+        for output in run_agent_loop(user_input, agent):
+            print(output)
 
 
 @app.callback(invoke_without_command=True)
@@ -84,8 +89,9 @@ def run(
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        agent_session = Session(session_id) if session_id else Session()
-        run_agent_loop(text, agent_session)
+        agent = Agent.main(Session(session_id) if session_id else Session())
+        for output in run_agent_loop(text, agent):
+            print(output)
         raise typer.Exit(code=0)
 
     interactive_loop(session=Session(session_id) if session_id else None)

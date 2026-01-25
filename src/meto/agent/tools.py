@@ -1,9 +1,11 @@
+import importlib
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from meto.agent.session import Session
 from meto.conf import settings
@@ -461,6 +463,35 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_task",
+            "description": (
+                "Spawn subagent for isolated subtask. Each agent type has specific tools. "
+                "Use for: exploration (read-only), planning (design), coding (implementation)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Short task name (3-5 words)",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Detailed instructions for subagent",
+                    },
+                    "agent_name": {
+                        "type": "string",
+                        "description": "Name of agent to spawn",
+                    },
+                },
+                "required": ["description", "prompt", "agent_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
 
@@ -472,6 +503,7 @@ def run_tool(
     session: Session | None = None,
 ) -> str:
     """Run a tool by name with given parameters."""
+
     if logger:
         logger.log_tool_selection(tool_name, parameters)
 
@@ -507,6 +539,18 @@ def run_tool(
             else:
                 items = parameters.get("items", [])
                 tool_output = _manage_todos(session, items)
+        elif tool_name == "run_task":
+            description = parameters.get("description", "")
+            prompt = parameters.get("prompt", "")
+            agent_name = parameters.get("agent_name", "")
+            # Dynamic import to avoid static import cycles reported by pyright.
+            # This is only needed when the tool is invoked.
+            subagent_mod = importlib.import_module("meto.agent.subagent")
+            execute_task = cast(
+                Callable[[str, str, str | None], str],
+                subagent_mod.execute_task,
+            )
+            tool_output = execute_task(prompt, agent_name, description)
 
         if logger:
             logger.log_tool_execution(tool_name, tool_output, error=False)

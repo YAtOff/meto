@@ -40,9 +40,14 @@ class Settings(BaseSettings):
 
     # --- Agent loop tuning ---
 
-    MAX_TURNS: int = Field(
+    MAIN_AGENT_MAX_TURNS: int = Field(
+        default=100,
+        description="Maximum number of model/tool iterations for the main agent per prompt.",
+    )
+
+    SUBAGENT_MAX_TURNS: int = Field(
         default=25,
-        description="Maximum number of model/tool iterations per prompt.",
+        description="Maximum number of model/tool iterations for subagents per task.",
     )
 
     TOOL_TIMEOUT_SECONDS: int = Field(

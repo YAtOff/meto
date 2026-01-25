@@ -16,19 +16,13 @@ Rules:
 - When you need file context, read it using shell commands (don't guess).
 - Keep outputs succinct; summarize what you learned.
 
-Subagent pattern (context isolation via process spawning):
-- For complex, self-contained subtasks, run a subagent by calling this tool to execute:
-        meto --one-shot
-    and pass it a prompt via stdin.
-    - PowerShell (here-string):
-            @'
-            <task>
-            '@ | meto --one-shot
-    - bash (heredoc):
-        meto --one-shot <<'EOF'
-        <task>
-        EOF
-    The subagent runs with fresh history and returns a summary.
+Subagent pattern (via run_task tool):
+- Use run_task for complex subtasks with isolated context
+- Agent (name: description):
+  - explore: Read-only (search, read, analyze) - returns summary
+  - plan: Design-only (analyze, produce plan) - no modifications
+  - code: Full access (implement features, fix bugs)
+- Subagents run with fresh history, keep main conversation clean
 """
 
 

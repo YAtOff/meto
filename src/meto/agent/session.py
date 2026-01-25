@@ -6,9 +6,10 @@ import json
 import logging
 import random
 import threading
+from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 from rich.console import Console
 
@@ -25,7 +26,60 @@ def generate_session_id() -> str:
     return f"{timestamp}-{random_suffix}"
 
 
-class SessionLogger:
+class SessionLogger(ABC):
+    """Base class for session loggers."""
+
+    session_id: str
+
+    def __init__(self, session_id: str) -> None:
+        self.session_id = session_id
+
+    @abstractmethod
+    def log_user(self, content: str) -> None:
+        del content
+        raise NotImplementedError
+
+    @abstractmethod
+    def log_assistant(self, content: str | None, tool_calls: list[Any] | None) -> None:
+        del content
+        del tool_calls
+        raise NotImplementedError
+
+    @abstractmethod
+    def log_tool(self, tool_call_id: str, content: str) -> None:
+        del tool_call_id
+        del content
+        raise NotImplementedError
+
+
+class NullSessionLogger(SessionLogger):
+    """No-op session logger."""
+
+    session_id: str
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(session_id)
+        self.session_id = session_id
+
+    @override
+    def log_user(self, content: str) -> None:
+        del content
+        pass
+
+    @override
+    def log_assistant(self, content: str | None, tool_calls: list[Any] | None) -> None:
+        del content
+        del tool_calls
+        pass
+
+    @override
+    def log_tool(self, tool_call_id: str, content: str) -> None:
+        del tool_call_id
+        del content
+        pass
+
+
+class FileSessionLogger(SessionLogger):
     """Append-only JSONL logger for chat history persistence."""
 
     session_id: str
@@ -37,6 +91,7 @@ class SessionLogger:
         self, session_id: str | None = None, session_dir: Path = settings.SESSION_DIR
     ) -> None:
         self.session_id = session_id or generate_session_id()
+        super().__init__(self.session_id)
         self.session_file = session_dir / f"session-{self.session_id}.jsonl"
         self._lock = threading.Lock()
         self._console = Console(stderr=True)
@@ -50,6 +105,7 @@ class SessionLogger:
             with open(self.session_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
+    @override
     def log_user(self, content: str) -> None:
         """Log user message with timestamp."""
         msg = {
@@ -61,6 +117,7 @@ class SessionLogger:
         self._append(msg)
         self._console.print(f"[bold cyan]→[/] {content}")
 
+    @override
     def log_assistant(self, content: str | None, tool_calls: list[Any] | None) -> None:
         """Log assistant response with optional tool_calls."""
         msg: dict[str, Any] = {
@@ -73,6 +130,7 @@ class SessionLogger:
             msg["tool_calls"] = tool_calls
         self._append(msg)
 
+    @override
     def log_tool(self, tool_call_id: str, content: str) -> None:
         """Log tool execution result."""
         msg = {
@@ -152,18 +210,22 @@ class Session:
 
     session_id: str
     history: list[dict[str, Any]]
+    session_logger_cls: type[SessionLogger]
     session_logger: SessionLogger
     todos: TodoManger
 
-    def __init__(self, sid: str | None = None) -> None:
+    def __init__(
+        self, sid: str | None = None, session_logger_cls: type[SessionLogger] | None = None
+    ) -> None:
+        self.session_logger_cls = session_logger_cls or FileSessionLogger
         if sid:
             self.session_id = sid
             self.history = load_session(sid)
-            self.session_logger = SessionLogger(sid)
+            self.session_logger = self.session_logger_cls(sid)
         else:
             self.session_id = generate_session_id()
             self.history = []
-            self.session_logger = SessionLogger(self.session_id)
+            self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManger()
 
     def clear(self) -> None:
@@ -171,12 +233,12 @@ class Session:
         self.history.clear()
         self.todos.clear()
         self.session_id = generate_session_id()
-        self.session_logger = SessionLogger(self.session_id)
+        self.session_logger = self.session_logger_cls(self.session_id)
 
     def renew(self) -> None:
         """Generate new session ID with current history preserved."""
         self.session_id = generate_session_id()
-        self.session_logger = SessionLogger(self.session_id)
+        self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManger()
         for msg in self.history:
             if msg["role"] == "user":

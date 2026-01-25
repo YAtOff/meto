@@ -2,47 +2,51 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Generator
 from typing import Any, cast
 
 from openai import OpenAI
 
+from meto.agent.agent import Agent
+from meto.agent.exceptions import MaxStepsExceededError
 from meto.agent.log import ReasoningLogger
 from meto.agent.prompt import build_system_prompt
-from meto.agent.session import Session
-from meto.agent.tools import AVAILABLE_TOOLS, TOOLS, run_tool
+from meto.agent.tools import run_tool
 from meto.conf import settings
+
+# pyright: reportImportCycles=false
 
 logger = logging.getLogger("agent")
 client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
-def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> None:
+def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
     """Run the agent loop for a single user prompt.
 
     In interactive mode, this function is called repeatedly and shares module
-    state (`session.history`) so the conversation continues.
+    state (`agent.session.history`) so the conversation continues.
     """
 
     if not prompt.strip():
         return
 
-    reasoning_logger = ReasoningLogger(session.session_id, agent_name)
+    reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
     reasoning_logger.log_user_input(prompt)
-    session.history.append({"role": "user", "content": prompt})
-    session.session_logger.log_user(prompt)
+    agent.session.history.append({"role": "user", "content": prompt})
+    agent.session.session_logger.log_user(prompt)
 
-    for _turn in range(settings.MAX_TURNS):
+    for _turn in range(agent.max_turns):
         # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
         # Our history is intentionally JSON-shaped, so treat these as dynamic.
         messages: Any = [
             {"role": "system", "content": build_system_prompt()},
-            *session.history,
+            *agent.session.history,
         ]
 
         resp = client.chat.completions.create(
             model=settings.DEFAULT_MODEL,
             messages=messages,
-            tools=cast(Any, TOOLS),
+            tools=cast(Any, agent.tools),
         )
 
         msg = resp.choices[0].message
@@ -59,13 +63,13 @@ def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> N
         }
         if tool_calls:
             assistant_message["tool_calls"] = [tc.model_dump() for tc in tool_calls]
-        session.history.append(assistant_message)
-        session.session_logger.log_assistant(
+        agent.session.history.append(assistant_message)
+        agent.session.session_logger.log_assistant(
             assistant_message["content"], assistant_message.get("tool_calls")
         )
 
         if assistant_content:
-            print(assistant_content)
+            yield assistant_content
 
         if not tool_calls:
             reasoning_logger.log_loop_completion("No more tool calls requested")
@@ -78,8 +82,8 @@ def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> N
 
             fn = tc_any.function
             fn_name = getattr(fn, "name", None)
-            if not isinstance(fn_name, str) or fn_name not in AVAILABLE_TOOLS:
-                session.history.append(
+            if not isinstance(fn_name, str) or not agent.has_tool(fn_name):
+                agent.session.history.append(
                     {
                         "role": "tool",
                         "tool_call_id": tc_any.id,
@@ -103,16 +107,16 @@ def run_agent_loop(prompt: str, session: Session, agent_name: str = "main") -> N
                 arguments = {}
 
             # Execute tool (logging happens inside run_tool)
-            tool_output = run_tool(fn_name, arguments, reasoning_logger, session)
+            tool_output = run_tool(fn_name, arguments, reasoning_logger, agent.session)
 
-            session.history.append(
+            agent.session.history.append(
                 {
                     "role": "tool",
                     "tool_call_id": tc_any.id,
                     "content": tool_output,
                 }
             )
-            session.session_logger.log_tool(tc_any.id, tool_output)
+            agent.session.session_logger.log_tool(tc_any.id, tool_output)
 
-    reasoning_logger.log_loop_completion(f"Reached max turns ({settings.MAX_TURNS})")
-    print(f"(stopped after {settings.MAX_TURNS} turns; consider increasing METO_MAX_TURNS)")
+    reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
+    raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")
