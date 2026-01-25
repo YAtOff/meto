@@ -202,18 +202,18 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
-def _manage_tasks(session: Session, items: list[dict[str, Any]]) -> str:
-    """Update the task list for a session.
+def _manage_todos(session: Session, items: list[dict[str, Any]]) -> str:
+    """Update the todo list for a session.
 
     Args:
-        session: The session containing the TaskManager
-        items: Complete new task list (replaces existing)
+        session: The session containing the TodoManager
+        items: Complete new todo list (replaces existing)
 
     Returns:
-        Rendered view of the task list
+        Rendered view of the todo list
     """
     try:
-        return session.tasks.update(items)
+        return session.todos.update(items)
     except Exception as e:
         return f"Error: {e}"
 
@@ -423,29 +423,29 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "manage_tasks",
+            "name": "manage_todos",
             "description": (
-                "Update the task list. Use to plan and track progress on multi-step tasks. "
-                "Mark tasks in_progress before starting, completed when done. "
-                "Only ONE task can be in_progress at a time."
+                "Update the todo list. Use to plan and track progress on multi-step todos. "
+                "Mark todos in_progress before starting, completed when done. "
+                "Only ONE todo can be in_progress at a time."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "items": {
                         "type": "array",
-                        "description": "Complete list of tasks (replaces existing)",
+                        "description": "Complete list of todos (replaces existing)",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "content": {
                                     "type": "string",
-                                    "description": "Task description",
+                                    "description": "Todo description",
                                 },
                                 "status": {
                                     "type": "string",
                                     "enum": ["pending", "in_progress", "completed"],
-                                    "description": "Task status",
+                                    "description": "Todo status",
                                 },
                                 "activeForm": {
                                     "type": "string",
@@ -501,12 +501,12 @@ def run_tool(
             url = parameters.get("url", "")
             max_bytes = parameters.get("max_bytes", 100000)
             tool_output = _fetch(url, max_bytes)
-        elif tool_name == "manage_tasks":
+        elif tool_name == "manage_todos":
             if session is None:
-                tool_output = "Error: session required for manage_tasks"
+                tool_output = "Error: session required for manage_todos"
             else:
                 items = parameters.get("items", [])
-                tool_output = _manage_tasks(session, items)
+                tool_output = _manage_todos(session, items)
 
         if logger:
             logger.log_tool_execution(tool_name, tool_output, error=False)

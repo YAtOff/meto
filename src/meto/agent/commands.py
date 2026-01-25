@@ -219,10 +219,10 @@ def cmd_context(args: list[str], session: Session) -> None:
     print(format_context_summary(session.history))
 
 
-def cmd_tasks(args: list[str], session: Session) -> None:
+def cmd_todos(args: list[str], session: Session) -> None:
     """Show current task list."""
     del args
-    print(session.tasks.render())
+    print(session.todos.render())
 
 
 COMMANDS: dict[str, SlashCommandSpec] = {
@@ -251,8 +251,8 @@ COMMANDS: dict[str, SlashCommandSpec] = {
         handler=cmd_quit,
         description="Exit meto",
     ),
-    "/tasks": SlashCommandSpec(
-        handler=cmd_tasks,
+    "/todos": SlashCommandSpec(
+        handler=cmd_todos,
         description="Show current task list",
     ),
 }

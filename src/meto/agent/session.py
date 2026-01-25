@@ -12,7 +12,7 @@ from typing import Any
 
 from rich.console import Console
 
-from meto.agent.tasks import TaskManager
+from meto.agent.todo import TodoManger
 from meto.conf import settings
 
 logger = logging.getLogger("agent")
@@ -148,12 +148,12 @@ def get_session_info(path: Path) -> dict[str, Any]:
 
 
 class Session:
-    """Wraps session_id, history, session_logger, and tasks for unified session management."""
+    """Wraps session_id, history, session_logger, and todos for unified session management."""
 
     session_id: str
     history: list[dict[str, Any]]
     session_logger: SessionLogger
-    tasks: TaskManager
+    todos: TodoManger
 
     def __init__(self, sid: str | None = None) -> None:
         if sid:
@@ -164,12 +164,12 @@ class Session:
             self.session_id = generate_session_id()
             self.history = []
             self.session_logger = SessionLogger(self.session_id)
-        self.tasks = TaskManager()
+        self.todos = TodoManger()
 
     def clear(self) -> None:
-        """Clear history and tasks, start new session with new ID."""
+        """Clear history and todos, start new session with new ID."""
         self.history.clear()
-        self.tasks.clear()
+        self.todos.clear()
         self.session_id = generate_session_id()
         self.session_logger = SessionLogger(self.session_id)
 
@@ -177,7 +177,7 @@ class Session:
         """Generate new session ID with current history preserved."""
         self.session_id = generate_session_id()
         self.session_logger = SessionLogger(self.session_id)
-        self.tasks = TaskManager()
+        self.todos = TodoManger()
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])

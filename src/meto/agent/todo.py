@@ -1,13 +1,13 @@
-"""Task management for structured planning and progress tracking."""
+"""Todo management for structured planning and progress tracking."""
 
 from __future__ import annotations
 
 
-class TaskManager:
-    """Manages a structured task list with enforced constraints.
+class TodoManger:
+    """Manages a structured todo list with enforced constraints.
 
     Constraints:
-    - Max 20 items: Prevents endless task lists
+    - Max 20 items: Prevents endless todo lists
     - One in_progress: Forces focus on one thing at a time
     - Required fields: Each item needs content, status, and activeForm
 
@@ -20,7 +20,7 @@ class TaskManager:
         self.items: list[dict[str, str]] = []
 
     def update(self, items: list[dict[str, str]]) -> str:
-        """Validate and update the task list.
+        """Validate and update the todo list.
 
         The model sends a complete new list each time. We validate it,
         store it, and return a rendered view that the model will see.
@@ -32,10 +32,10 @@ class TaskManager:
         - Maximum 20 items allowed
 
         Args:
-            items: Complete new task list (replaces existing)
+            items: Complete new todo list (replaces existing)
 
         Returns:
-            Rendered text view of the task list
+            Rendered text view of the todo list
         """
         validated: list[dict[str, str]] = []
         in_progress_count = 0
@@ -67,27 +67,27 @@ class TaskManager:
 
         # Enforce constraints
         if len(validated) > 20:
-            raise ValueError("Max 20 tasks allowed")
+            raise ValueError("Max 20 todos allowed")
         if in_progress_count > 1:
-            raise ValueError("Only one task can be in_progress at a time")
+            raise ValueError("Only one todo can be in_progress at a time")
 
         self.items = validated
         return self.render()
 
     def render(self) -> str:
-        """Render the task list as human-readable text.
+        """Render the todo list as human-readable text.
 
         Format:
-            [x] Completed task
-            [>] In progress task <- Doing something...
-            [ ] Pending task
+            [x] Completed todo
+            [>] In progress todo <- Doing something...
+            [ ] Pending todo
 
             (2/3 completed)
 
         This rendered text is what the model sees as the tool result.
         """
         if not self.items:
-            return "No tasks."
+            return "No todos."
 
         lines: list[str] = []
         for item in self.items:
@@ -104,5 +104,5 @@ class TaskManager:
         return "\n".join(lines)
 
     def clear(self) -> None:
-        """Clear all tasks."""
+        """Clear all todos."""
         self.items.clear()
