@@ -32,8 +32,7 @@ uv tool install --editable .     # install as local tool
 - `src/meto/cli.py` - CLI interface (Typer), interactive mode (prompt-toolkit), one-shot mode
 - `src/meto/agent/agent_loop.py` - Main agent loop: LLM calls, tool execution, history management
 - `src/meto/agent/agent.py` - Agent class with main/subagent factory methods
-- `src/meto/agent/agent_loader.py` - User-defined agent loader (YAML frontmatter + markdown)
-- `src/meto/agent/agent_registry.py` - Built-in agents + user agent merging
+- `src/meto/agent/agent_registry.py` - Built-in agents + user agent loader (YAML frontmatter + markdown)
 - `src/meto/agent/tool_schema.py` - Tool schemas (OpenAI function calling format)
 - `src/meto/agent/tool_runner.py` - Tool execution implementations (shell, file ops, grep, fetch, todos, subagents)
 - `src/meto/agent/session.py` - Session persistence (JSONL), history loading, session logging

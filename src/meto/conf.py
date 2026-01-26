@@ -60,6 +60,8 @@ class Settings(BaseSettings):
         description="Maximum number of characters captured from a tool result.",
     )
 
+    # --- Directories ---
+
     SESSION_DIR: Path = Field(
         default=Path.home() / ".meto" / "sessions",
         description="Directory to store session files.",
@@ -70,6 +72,11 @@ class Settings(BaseSettings):
     def ensure_session_dir(cls, v: Path) -> Path:
         v.mkdir(parents=True, exist_ok=True)
         return v
+
+    AGENTS_DIR: Path = Field(
+        default=Path.cwd() / ".meto" / "agents",
+        description="Directory to scan for user-defined agent files.",
+    )
 
     # --- Logging ---
 

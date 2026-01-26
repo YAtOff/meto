@@ -32,6 +32,7 @@ from typing import Any
 import typer
 from openai import OpenAI
 
+from meto.agent.agent_registry import get_all_agents
 from meto.agent.context import format_context_summary, save_agent_context
 from meto.agent.session import Session
 from meto.conf import settings
@@ -225,7 +226,23 @@ def cmd_todos(args: list[str], session: Session) -> None:
     print(session.todos.render())
 
 
+def cmd_agents(args: list[str], session: Session) -> None:
+    """List all available agents."""
+    del args, session
+    agents = get_all_agents()
+    print("Available agents:")
+    for name, config in sorted(agents.items()):
+        tools = config["tools"]
+        tools_str = "*" if tools == "*" else ", ".join(tools)
+        print(f"  {name:<12} - {config['description']}")
+        print(f"               tools: {tools_str}")
+
+
 COMMANDS: dict[str, SlashCommandSpec] = {
+    "/agents": SlashCommandSpec(
+        handler=cmd_agents,
+        description="List all available agents",
+    ),
     "/clear": SlashCommandSpec(
         handler=cmd_clear,
         description="Clear conversation history",

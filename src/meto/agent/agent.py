@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from meto.agent.agent_registry import AGENTS, get_tools_for_agent
+from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
 from meto.agent.session import NullSessionLogger, Session
 from meto.conf import settings
@@ -29,7 +29,8 @@ class Agent:
 
     @classmethod
     def subagent(cls, name: str) -> Agent:
-        agent_config = AGENTS.get(name)
+        all_agents = get_all_agents()
+        agent_config = all_agents.get(name)
         if agent_config:
             prompt = agent_config["prompt"]
             allowed_tools = agent_config.get("tools", [])
@@ -41,7 +42,9 @@ class Agent:
                 max_turns=settings.SUBAGENT_MAX_TURNS,
             )
         else:
-            raise SubagentError(f"Unknown agent type '{name}'")
+            # Build helpful error message with available agents
+            available = ", ".join(sorted(all_agents.keys()))
+            raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     def __init__(
         self,

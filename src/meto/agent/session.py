@@ -11,8 +11,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, override
 
-from rich.console import Console
-
 from meto.agent.todo import TodoManager
 from meto.conf import settings
 

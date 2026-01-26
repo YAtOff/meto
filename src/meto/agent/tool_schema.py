@@ -236,4 +236,5 @@ TOOLS: list[dict[str, Any]] = [
     },
 ]
 
-AVAILABLE_TOOLS = [tool["function"]["name"] for tool in TOOLS]
+TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}
+AVAILABLE_TOOLS = list(TOOLS_BY_NAME.keys())

@@ -88,6 +88,8 @@ def _run_shell(command: str) -> str:
                 shell=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=settings.TOOL_TIMEOUT_SECONDS,
                 cwd=os.getcwd(),
             )
@@ -97,6 +99,8 @@ def _run_shell(command: str) -> str:
                 shell=False,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=settings.TOOL_TIMEOUT_SECONDS,
                 cwd=os.getcwd(),
             )
@@ -249,6 +253,8 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
                 args,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=settings.TOOL_TIMEOUT_SECONDS,
                 cwd=os.getcwd(),
             )
