@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from meto.agent.tools import TOOLS
+from meto.agent.tool_schema import TOOLS
 
 
 class AgentConfig(TypedDict):

@@ -1,12 +1,18 @@
-"""Subagent execution module.
+"""Subagent execution.
 
-Handles spawning isolated subagents via run_agent_loop.
-Separate module to avoid circular import between tools.py and loop.py.
+This module runs subagents via a direct in-process call to `run_agent_loop`.
 
-Cycle: loop -> registry -> tools -> subagent -> loop
-Broken by using runtime-only import of run_agent_loop.
+Architectural note:
+- This module may import the loop.
+- The tool runtime must NOT import this module; instead it receives
+    `execute_task` via dependency injection.
 """
 
+from __future__ import annotations
+
+from meto.agent.agent import Agent
+from meto.agent.loop import run_agent_loop
+from meto.agent.tool_runner import DefaultToolRunner
 from meto.conf import settings
 
 
@@ -20,14 +26,11 @@ def execute_task(prompt: str, agent_name: str, description: str | None = None) -
     """Execute task in isolated subagent via direct `run_agent_loop` call."""
     _ = description  # Reserved for future progress display
 
-    # Import at runtime to avoid static import cycles:
-    # loop -> agent_registry -> tools -> subagent -> loop
-    from meto.agent.agent import Agent
-    from meto.agent.loop import run_agent_loop
-
     try:
         agent = Agent.subagent(agent_name)
-        output = "\n".join(run_agent_loop(prompt, agent))
+        # Allow subagents that have access to `run_task` to spawn further subagents.
+        tool_runner = DefaultToolRunner(subagent_executor=execute_task)
+        output = "\n".join(run_agent_loop(prompt, agent, tool_runner))
         return _truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
     except Exception as ex:
         return f"(subagent error: {ex})"

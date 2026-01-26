@@ -3,24 +3,33 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Generator
-from typing import Any, cast
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, cast
 
 from openai import OpenAI
 
-from meto.agent.agent import Agent
 from meto.agent.exceptions import MaxStepsExceededError
 from meto.agent.log import ReasoningLogger
 from meto.agent.prompt import build_system_prompt
-from meto.agent.tools import run_tool
 from meto.conf import settings
 
-# pyright: reportImportCycles=false
+if TYPE_CHECKING:
+    from meto.agent.agent import Agent
+    from meto.agent.tool_runner import ToolRunner
 
 logger = logging.getLogger("agent")
-client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
-def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
+@lru_cache(maxsize=1)
+def _get_client() -> OpenAI:
+    # Keep client creation in this module (per design), but do it lazily so
+    # importing `meto.agent.loop` stays import-light.
+    return OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+
+
+def run_agent_loop(
+    prompt: str, agent: Agent, tool_runner: ToolRunner
+) -> Generator[str, None, None]:
     """Run the agent loop for a single user prompt.
 
     In interactive mode, this function is called repeatedly and shares module
@@ -43,7 +52,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             *agent.session.history,
         ]
 
-        resp = client.chat.completions.create(
+        resp = _get_client().chat.completions.create(
             model=settings.DEFAULT_MODEL,
             messages=messages,
             tools=cast(Any, agent.tools),
@@ -106,8 +115,8 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             else:
                 arguments = {}
 
-            # Execute tool (logging happens inside run_tool)
-            tool_output = run_tool(fn_name, arguments, reasoning_logger, agent.session)
+            # Execute tool (logging happens inside the tool runner)
+            tool_output = tool_runner.run_tool(fn_name, arguments, reasoning_logger, agent.session)
 
             agent.session.history.append(
                 {

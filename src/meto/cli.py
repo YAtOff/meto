@@ -14,6 +14,8 @@ from meto.agent.agent import Agent
 from meto.agent.commands import handle_slash_command
 from meto.agent.loop import run_agent_loop
 from meto.agent.session import Session, get_session_info, list_session_files
+from meto.agent.subagent import execute_task
+from meto.agent.tool_runner import DefaultToolRunner
 
 app = typer.Typer(add_completion=False)
 
@@ -29,12 +31,18 @@ def _strip_single_trailing_newline(text: str) -> str:
     return text
 
 
-def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) -> None:
+def interactive_loop(
+    prompt_text: str = ">>> ",
+    session: Session | None = None,
+    *,
+    agent_name: str = "main",
+) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
         session = Session()
 
-    agent = Agent.main(session)
+    agent = Agent.main(session) if agent_name == "main" else Agent.subagent(agent_name)
+    tool_runner = DefaultToolRunner(subagent_executor=execute_task)
 
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
@@ -50,13 +58,13 @@ def interactive_loop(prompt_text: str = ">>> ", session: Session | None = None) 
         if was_handled:
             # If custom command provided a prompt, run agent loop with it
             if custom_prompt:
-                for output in run_agent_loop(custom_prompt, agent):
+                for output in run_agent_loop(custom_prompt, agent, tool_runner):
                     print(output)
             # Otherwise, built-in command was executed, continue to next iteration
             continue
 
         # No slash command, run agent loop with user input
-        for output in run_agent_loop(user_input, agent):
+        for output in run_agent_loop(user_input, agent, tool_runner):
             print(output)
 
 
@@ -77,6 +85,13 @@ def run(
             help="Resume session by ID (format: timestamp-randomsuffix)",
         ),
     ] = None,
+    agent_name: Annotated[
+        str,
+        typer.Option(
+            "--agent",
+            help="Agent type to use (main, explore, plan, code).",
+        ),
+    ] = "main",
 ) -> None:
     """Run meto."""
 
@@ -89,12 +104,14 @@ def run(
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        agent = Agent.main(Session(session_id) if session_id else Session())
-        for output in run_agent_loop(text, agent):
+        base_session = Session(session_id) if session_id else Session()
+        agent = Agent.main(base_session) if agent_name == "main" else Agent.subagent(agent_name)
+        tool_runner = DefaultToolRunner(subagent_executor=execute_task)
+        for output in run_agent_loop(text, agent, tool_runner):
             print(output)
         raise typer.Exit(code=0)
 
-    interactive_loop(session=Session(session_id) if session_id else None)
+    interactive_loop(session=Session(session_id) if session_id else None, agent_name=agent_name)
 
 
 @app.command()

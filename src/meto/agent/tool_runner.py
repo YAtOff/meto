@@ -1,0 +1,341 @@
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+from collections.abc import Callable
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Protocol, cast
+from urllib.error import URLError
+from urllib.request import urlopen
+
+from meto.agent.session import Session
+from meto.conf import settings
+
+# Tool runtime / execution.
+#
+# Important architectural rule:
+# - This module must not import `meto.agent.loop` or `meto.cli`.
+
+
+class ToolRunner(Protocol):
+    def run_tool(
+        self,
+        tool_name: str,
+        parameters: dict[str, Any],
+        logger: Any | None = None,
+        session: Session | None = None,
+    ) -> str: ...
+
+
+SubagentExecutor = Callable[[str, str, str | None], str]
+
+
+def _pick_shell_runner() -> list[str] | None:
+    """Pick an available shell runner.
+
+    We prefer bash if present (Git Bash / WSL), otherwise PowerShell.
+    Returns a base argv list to which the actual command string should be appended.
+    """
+
+    bash = shutil.which("bash")
+    if bash:
+        return [bash, "-lc"]
+
+    pwsh = shutil.which("pwsh")
+    if pwsh:
+        return [pwsh, "-NoProfile", "-Command"]
+
+    powershell = shutil.which("powershell")
+    if powershell:
+        return [powershell, "-NoProfile", "-Command"]
+
+    return None
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n... (truncated to {limit} chars)"
+
+
+def _format_size(size: float) -> str:
+    """Format file size in human-readable format."""
+
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def _run_shell(command: str) -> str:
+    """Execute a shell command and return combined stdout/stderr."""
+
+    if not command.strip():
+        return "(empty command)"
+
+    runner = _pick_shell_runner()
+    try:
+        if runner is None:
+            completed = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=settings.TOOL_TIMEOUT_SECONDS,
+                cwd=os.getcwd(),
+            )
+        else:
+            completed = subprocess.run(
+                [*runner, command],
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=settings.TOOL_TIMEOUT_SECONDS,
+                cwd=os.getcwd(),
+            )
+    except subprocess.TimeoutExpired:
+        return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
+    except Exception as ex:  # noqa: BLE001
+        return f"(shell execution error: {ex})"
+
+    output = (completed.stdout or "") + (completed.stderr or "")
+    output = output.strip()
+    if not output:
+        output = "(empty)"
+    return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
+
+
+def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
+    """List directory contents with structured output."""
+
+    try:
+        dir_path = Path(path).expanduser().resolve()
+        if not dir_path.exists():
+            return f"Error: Path does not exist: {path}"
+        if not dir_path.is_dir():
+            return f"Error: Not a directory: {path}"
+    except Exception as ex:
+        return f"Error accessing path '{path}': {ex}"
+
+    lines: list[str] = []
+    lines.append(f"{dir_path}:")
+
+    try:
+        if recursive:
+            entries = sorted(dir_path.rglob("*"), key=lambda p: (p.parent, p.name))
+        else:
+            entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+
+        for entry in entries:
+            if not include_hidden and entry.name.startswith("."):
+                continue
+
+            entry_type = "dir" if entry.is_dir() else "file"
+            size = 0
+            if entry.is_file():
+                try:
+                    size = entry.stat().st_size
+                except OSError:
+                    pass
+
+            size_str = _format_size(size) if entry.is_file() else ""
+            try:
+                mtime = datetime.fromtimestamp(entry.stat().st_mtime)
+                mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
+            except OSError:
+                mtime_str = "?"
+
+            name = entry.name
+            if recursive:
+                rel_path = entry.relative_to(dir_path)
+                name = str(rel_path)
+                if entry.is_dir():
+                    name = str(rel_path) + "/"
+
+            size_col = f"    {size_str:>8}" if size_str else "           "
+            lines.append(f"  {name:<30} ({entry_type:<4}){size_col}    {mtime_str}")
+
+    except PermissionError:
+        return f"Error: Permission denied accessing: {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error listing directory: {ex}"
+
+    if len(lines) == 1:
+        lines.append("  (empty directory)")
+
+    return "\n".join(lines)
+
+
+def _read_file(path: str) -> str:
+    """Read file contents with proper error handling."""
+
+    try:
+        file_path = Path(path).expanduser().resolve()
+        if not file_path.exists():
+            return f"Error: File does not exist: {path}"
+        if not file_path.is_file():
+            return f"Error: Not a file: {path}"
+
+        content = file_path.read_text(encoding="utf-8")
+        return _truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+    except UnicodeDecodeError:
+        return f"Error: Cannot decode file {path} as UTF-8 text"
+    except PermissionError:
+        return f"Error: Permission denied reading {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error reading file {path}: {ex}"
+
+
+def _write_file(path: str, content: str) -> str:
+    """Write content to a file with proper error handling."""
+
+    try:
+        file_path = Path(path).expanduser().resolve()
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+        return f"Successfully wrote {len(content)} chars to {path}"
+    except PermissionError:
+        return f"Error: Permission denied writing to {path}"
+    except IsADirectoryError:
+        return f"Error: Path is a directory, not a file: {path}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error writing file {path}: {ex}"
+
+
+def _manage_todos(session: Session, items: list[dict[str, Any]]) -> str:
+    """Update the todo list for a session."""
+
+    try:
+        return session.todos.update(items)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = False) -> str:
+    """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
+
+    if not pattern.strip():
+        return "Error: Empty search pattern"
+
+    try:
+        search_path = Path(path).expanduser().resolve()
+        if not search_path.exists():
+            return f"Error: Path does not exist: {path}"
+    except Exception as ex:
+        return f"Error accessing path '{path}': {ex}"
+
+    rg = shutil.which("rg")
+    if rg:
+        flag = "-i" if case_insensitive else ""
+        cmd = f'{rg} {flag} --line-number --no-heading "{pattern}" "{path}"'
+    else:
+        runner = _pick_shell_runner()
+        if runner and ("bash" in runner[0] or "sh" in runner[0]):
+            flag = "-i" if case_insensitive else ""
+            cmd = f'grep -R {flag} -n "{pattern}" "{path}" 2>/dev/null || true'
+        elif runner and ("powershell" in runner[0] or "pwsh" in runner[0]):
+            flag = "" if case_insensitive else "-CaseSensitive"
+            cmd = (
+                f'Select-String -Path "{path}\\*" -Pattern "{pattern}" {flag} '
+                "| Select-Object -First 100"
+            )
+        else:
+            return "Error: No suitable search tool found (need rg, grep, or PowerShell)"
+
+    return _run_shell(cmd)
+
+
+def _fetch(url: str, max_bytes: int = 100000) -> str:
+    """Fetch URL via HTTP GET, return response body as text (truncated)."""
+
+    try:
+        with urlopen(url, timeout=10) as resp:
+            data = resp.read(max_bytes + 1)
+            return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
+    except URLError as e:
+        return f"Error fetching {url}: {e}"
+    except Exception as ex:  # noqa: BLE001
+        return f"Error fetching {url}: {ex}"
+
+
+class DefaultToolRunner:
+    """Default implementation of meto tool runtime."""
+
+    _subagent_executor: SubagentExecutor | None
+
+    def __init__(self, *, subagent_executor: SubagentExecutor | None = None) -> None:
+        self._subagent_executor = subagent_executor
+
+    def run_tool(
+        self,
+        tool_name: str,
+        parameters: dict[str, Any],
+        logger: Any | None = None,
+        session: Session | None = None,
+    ) -> str:
+        if logger:
+            logger.log_tool_selection(tool_name, parameters)
+
+        tool_output = ""
+        try:
+            if tool_name == "shell":
+                command = parameters.get("command", "")
+                tool_output = _run_shell(command)
+            elif tool_name == "list_dir":
+                path = parameters.get("path", ".")
+                recursive = parameters.get("recursive", False)
+                include_hidden = parameters.get("include_hidden", False)
+                tool_output = _list_directory(path, recursive, include_hidden)
+            elif tool_name == "read_file":
+                path = parameters.get("path", "")
+                tool_output = _read_file(path)
+            elif tool_name == "write_file":
+                path = parameters.get("path", "")
+                content = parameters.get("content", "")
+                tool_output = _write_file(path, content)
+            elif tool_name == "grep_search":
+                pattern = parameters.get("pattern", "")
+                path = parameters.get("path", ".")
+                case_insensitive = parameters.get("case_insensitive", False)
+                tool_output = _run_grep_search(pattern, path, case_insensitive)
+            elif tool_name == "fetch":
+                url = parameters.get("url", "")
+                max_bytes = parameters.get("max_bytes", 100000)
+                tool_output = _fetch(url, max_bytes)
+            elif tool_name == "manage_todos":
+                if session is None:
+                    tool_output = "Error: session required for manage_todos"
+                else:
+                    items = parameters.get("items", [])
+                    tool_output = _manage_todos(session, cast(list[dict[str, Any]], items))
+            elif tool_name == "run_task":
+                description = cast(str, parameters.get("description", ""))
+                prompt = cast(str, parameters.get("prompt", ""))
+                agent_name = cast(str, parameters.get("agent_name", ""))
+                if self._subagent_executor is None:
+                    tool_output = "Error: subagent executor not configured for run_task"
+                else:
+                    tool_output = self._subagent_executor(prompt, agent_name, description)
+            else:
+                tool_output = f"Error: Unknown tool: {tool_name}"
+
+            if logger:
+                logger.log_tool_execution(tool_name, tool_output, error=False)
+        except Exception as e:
+            tool_output = str(e)
+            if logger:
+                logger.log_tool_execution(tool_name, tool_output, error=True)
+
+        return tool_output
+
+
+def ensure_tool_runner(runner: ToolRunner | None) -> ToolRunner:
+    """Return a usable ToolRunner.
+
+    Note: the agent loop should prefer explicit injection from the CLI.
+    """
+
+    return runner if runner is not None else DefaultToolRunner()
