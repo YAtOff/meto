@@ -21,6 +21,8 @@ class JSONFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "session_id": getattr(record, "session_id", None),
+            "agent_name": getattr(record, "agent_name", None),
+            "agent_run_id": getattr(record, "agent_run_id", None),
             "turn": getattr(record, "turn", None),
         }
         return json.dumps(log_obj)
@@ -31,7 +33,7 @@ class ReasoningLogger:
 
     session_id: str
     agent_name: str
-    agent_run_id: str
+    agent_run_id: str | None
     turn_count: int
     console: Console
 

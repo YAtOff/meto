@@ -85,7 +85,6 @@ class FileSessionLogger(SessionLogger):
     session_id: str
     session_file: Path
     _lock: threading.Lock
-    _console: Console
 
     def __init__(
         self, session_id: str | None = None, session_dir: Path = settings.SESSION_DIR
@@ -94,7 +93,6 @@ class FileSessionLogger(SessionLogger):
         super().__init__(self.session_id)
         self.session_file = session_dir / f"session-{self.session_id}.jsonl"
         self._lock = threading.Lock()
-        self._console = Console(stderr=True)
 
         # Ensure parent directory exists
         self.session_file.parent.mkdir(parents=True, exist_ok=True)
@@ -115,7 +113,6 @@ class FileSessionLogger(SessionLogger):
             "session_id": self.session_id,
         }
         self._append(msg)
-        self._console.print(f"[bold cyan]→[/] {content}")
 
     @override
     def log_assistant(self, content: str | None, tool_calls: list[Any] | None) -> None:
