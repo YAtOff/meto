@@ -13,6 +13,9 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.enums import EditingMode
+
 from meto.agent.agent import Agent
 from meto.agent.session import Session
 from meto.conf import settings
@@ -318,6 +321,19 @@ def _execute_task(prompt: str, agent_name: str, description: str | None = None) 
         return f"(subagent error: {ex})"
 
 
+def _ask_user_question(question: str) -> str:
+    """Ask user a question using prompt_toolkit and return response."""
+
+    session = PromptSession(editing_mode=EditingMode.EMACS)
+    try:
+        response = session.prompt(f"{question} ")
+        return response
+    except (EOFError, KeyboardInterrupt):
+        return "(user cancelled input)"
+    except Exception as ex:
+        return f"(error getting user input: {ex})"
+
+
 def run_tool(
     tool_name: str,
     parameters: dict[str, Any],
@@ -364,6 +380,9 @@ def run_tool(
             prompt = cast(str, parameters.get("prompt", ""))
             agent_name = cast(str, parameters.get("agent_name", ""))
             tool_output = _execute_task(prompt, agent_name, description)
+        elif tool_name == "ask_user_question":
+            question = parameters.get("question", "")
+            tool_output = _ask_user_question(question)
         else:
             tool_output = f"Error: Unknown tool: {tool_name}"
 

@@ -234,6 +234,24 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_user_question",
+            "description": "Ask the user a question and return their response",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to ask the user",
+                    }
+                },
+                "required": ["question"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}
