@@ -35,6 +35,9 @@ class ReasoningLogger:
     turn_count: int
     console: Console
 
+    _logger: logging.Logger
+    _json_handler: logging.FileHandler | None
+
     def __init__(self, session_id: str, agent_name: str, agent_run_id: str | None = None) -> None:
         self.session_id = session_id
         self.agent_name = agent_name
@@ -42,10 +45,41 @@ class ReasoningLogger:
         self.turn_count = 0
         self.console = Console(stderr=True)
 
+        # Instance-specific logger to avoid accumulating handlers on a module-global logger.
+        self._logger = logging.getLogger(
+            f"meto.agent.reasoning.{self.session_id}.{self.agent_run_id}"
+        )
+        self._logger.setLevel(logging.INFO)
+        self._logger.propagate = False
+
+        # Ensure we never duplicate handlers even if the same logger name is reused.
+        for h in list(self._logger.handlers):
+            try:
+                h.close()
+            finally:
+                self._logger.removeHandler(h)
+
+        self._json_handler = None
+
         # JSON file handler
-        json_handler = logging.FileHandler(settings.log_file)
+        json_handler = logging.FileHandler(settings.log_file, encoding="utf-8")
         json_handler.setFormatter(JSONFormatter())
-        logger.addHandler(json_handler)
+        self._logger.addHandler(json_handler)
+        self._json_handler = json_handler
+
+    def close(self) -> None:
+        """Close any file handlers attached to this logger.
+
+        In interactive usage, ReasoningLogger instances are created frequently.
+        Explicitly closing handlers prevents file descriptor leaks and duplicate logs.
+        """
+
+        for h in list(self._logger.handlers):
+            try:
+                h.close()
+            finally:
+                self._logger.removeHandler(h)
+        self._json_handler = None
 
     def _log(self, level: int, msg: str, **kwargs: Any) -> None:
         """Internal log method that adds session context."""
@@ -55,7 +89,7 @@ class ReasoningLogger:
             "agent_run_id": self.agent_run_id,
             **kwargs,
         }
-        logger.log(level, msg, extra=extra)
+        self._logger.log(level, msg, extra=extra)
 
     def log_user_input(self, prompt: str):
         """Log the incoming user prompt."""
@@ -64,7 +98,7 @@ class ReasoningLogger:
 
     def log_api_request(self, messages: list[dict[str, Any]]) -> None:
         """Log the messages being sent to the model."""
-        logger.debug(f"[{self.session_id}] API request with {len(messages)} messages")
+        self._logger.debug(f"[{self.session_id}] API request with {len(messages)} messages")
 
     def log_model_response(self, response: Any, _model: str) -> None:
         """Log the raw model response."""

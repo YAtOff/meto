@@ -1,3 +1,5 @@
+# pyright: reportImportCycles=false
+
 from __future__ import annotations
 
 import os
@@ -8,8 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
+from meto.agent.agent import Agent
 from meto.agent.session import Session
 from meto.conf import settings
 
@@ -229,8 +233,33 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
 
     rg = shutil.which("rg")
     if rg:
-        flag = "-i" if case_insensitive else ""
-        cmd = f'{rg} {flag} --line-number --no-heading "{pattern}" "{path}"'
+        args: list[str] = [
+            rg,
+            "--line-number",
+            "--no-heading",
+        ]
+        if case_insensitive:
+            args.append("-i")
+
+        # `--` ensures patterns beginning with '-' are not interpreted as options.
+        args += ["--", pattern, str(search_path)]
+
+        try:
+            completed = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=settings.TOOL_TIMEOUT_SECONDS,
+                cwd=os.getcwd(),
+            )
+        except subprocess.TimeoutExpired:
+            return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
+        except Exception as ex:  # noqa: BLE001
+            return f"(search execution error: {ex})"
+
+        output = (completed.stdout or "") + (completed.stderr or "")
+        output = output.strip() or "(empty)"
+        return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
     else:
         runner = _pick_shell_runner()
         if runner and ("bash" in runner[0] or "sh" in runner[0]):
@@ -251,8 +280,13 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
 def _fetch(url: str, max_bytes: int = 100000) -> str:
     """Fetch URL via HTTP GET, return response body as text (truncated)."""
 
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return f"Error fetching {url}: unsupported URL scheme '{parsed.scheme}'"
+
     try:
-        with urlopen(url, timeout=10) as resp:
+        req = Request(url, headers={"User-Agent": "meto/0"})
+        with urlopen(req, timeout=10) as resp:
             data = resp.read(max_bytes + 1)
             return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
     except URLError as e:
@@ -261,81 +295,75 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
         return f"Error fetching {url}: {ex}"
 
 
-class DefaultToolRunner:
-    """Default implementation of meto tool runtime."""
+def _execute_task(prompt: str, agent_name: str, description: str | None = None) -> str:
+    """Execute task in isolated subagent via direct `run_agent_loop` call."""
+    _ = description  # Reserved for future progress display
 
-    _subagent_executor: SubagentExecutor | None
+    from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
 
-    def __init__(self, *, subagent_executor: SubagentExecutor | None = None) -> None:
-        self._subagent_executor = subagent_executor
+    try:
+        agent = Agent.subagent(agent_name)
+        # Allow subagents that have access to `run_task` to spawn further subagents.
+        output = "\n".join(run_agent_loop(prompt, agent))
+        return _truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
+    except Exception as ex:
+        return f"(subagent error: {ex})"
 
-    def run_tool(
-        self,
-        tool_name: str,
-        parameters: dict[str, Any],
-        logger: Any | None = None,
-        session: Session | None = None,
-    ) -> str:
-        if logger:
-            logger.log_tool_selection(tool_name, parameters)
 
-        tool_output = ""
-        try:
-            if tool_name == "shell":
-                command = parameters.get("command", "")
-                tool_output = _run_shell(command)
-            elif tool_name == "list_dir":
-                path = parameters.get("path", ".")
-                recursive = parameters.get("recursive", False)
-                include_hidden = parameters.get("include_hidden", False)
-                tool_output = _list_directory(path, recursive, include_hidden)
-            elif tool_name == "read_file":
-                path = parameters.get("path", "")
-                tool_output = _read_file(path)
-            elif tool_name == "write_file":
-                path = parameters.get("path", "")
-                content = parameters.get("content", "")
-                tool_output = _write_file(path, content)
-            elif tool_name == "grep_search":
-                pattern = parameters.get("pattern", "")
-                path = parameters.get("path", ".")
-                case_insensitive = parameters.get("case_insensitive", False)
-                tool_output = _run_grep_search(pattern, path, case_insensitive)
-            elif tool_name == "fetch":
-                url = parameters.get("url", "")
-                max_bytes = parameters.get("max_bytes", 100000)
-                tool_output = _fetch(url, max_bytes)
-            elif tool_name == "manage_todos":
-                if session is None:
-                    tool_output = "Error: session required for manage_todos"
-                else:
-                    items = parameters.get("items", [])
-                    tool_output = _manage_todos(session, cast(list[dict[str, Any]], items))
-            elif tool_name == "run_task":
-                description = cast(str, parameters.get("description", ""))
-                prompt = cast(str, parameters.get("prompt", ""))
-                agent_name = cast(str, parameters.get("agent_name", ""))
-                if self._subagent_executor is None:
-                    tool_output = "Error: subagent executor not configured for run_task"
-                else:
-                    tool_output = self._subagent_executor(prompt, agent_name, description)
+def run_tool(
+    tool_name: str,
+    parameters: dict[str, Any],
+    logger: Any | None = None,
+    session: Session | None = None,
+) -> str:
+    if logger:
+        logger.log_tool_selection(tool_name, parameters)
+
+    tool_output = ""
+    try:
+        if tool_name == "shell":
+            command = parameters.get("command", "")
+            tool_output = _run_shell(command)
+        elif tool_name == "list_dir":
+            path = parameters.get("path", ".")
+            recursive = parameters.get("recursive", False)
+            include_hidden = parameters.get("include_hidden", False)
+            tool_output = _list_directory(path, recursive, include_hidden)
+        elif tool_name == "read_file":
+            path = parameters.get("path", "")
+            tool_output = _read_file(path)
+        elif tool_name == "write_file":
+            path = parameters.get("path", "")
+            content = parameters.get("content", "")
+            tool_output = _write_file(path, content)
+        elif tool_name == "grep_search":
+            pattern = parameters.get("pattern", "")
+            path = parameters.get("path", ".")
+            case_insensitive = parameters.get("case_insensitive", False)
+            tool_output = _run_grep_search(pattern, path, case_insensitive)
+        elif tool_name == "fetch":
+            url = parameters.get("url", "")
+            max_bytes = parameters.get("max_bytes", 100000)
+            tool_output = _fetch(url, max_bytes)
+        elif tool_name == "manage_todos":
+            if session is None:
+                tool_output = "Error: session required for manage_todos"
             else:
-                tool_output = f"Error: Unknown tool: {tool_name}"
+                items = parameters.get("items", [])
+                tool_output = _manage_todos(session, cast(list[dict[str, Any]], items))
+        elif tool_name == "run_task":
+            description = cast(str, parameters.get("description", ""))
+            prompt = cast(str, parameters.get("prompt", ""))
+            agent_name = cast(str, parameters.get("agent_name", ""))
+            tool_output = _execute_task(prompt, agent_name, description)
+        else:
+            tool_output = f"Error: Unknown tool: {tool_name}"
 
-            if logger:
-                logger.log_tool_execution(tool_name, tool_output, error=False)
-        except Exception as e:
-            tool_output = str(e)
-            if logger:
-                logger.log_tool_execution(tool_name, tool_output, error=True)
+        if logger:
+            logger.log_tool_execution(tool_name, tool_output, error=False)
+    except Exception as e:
+        tool_output = str(e)
+        if logger:
+            logger.log_tool_execution(tool_name, tool_output, error=True)
 
-        return tool_output
-
-
-def ensure_tool_runner(runner: ToolRunner | None) -> ToolRunner:
-    """Return a usable ToolRunner.
-
-    Note: the agent loop should prefer explicit injection from the CLI.
-    """
-
-    return runner if runner is not None else DefaultToolRunner()
+    return tool_output

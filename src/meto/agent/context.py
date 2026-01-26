@@ -12,17 +12,19 @@ from typing import Any, cast
 
 def dump_agent_context(
     history: list[dict[str, Any]],
-    format: str = "json",
+    output_format: str = "json",
     *,
     include_system: bool = True,
+    format: str | None = None,
 ) -> str:
     """
     Dump agent context (conversation history) in a specified format.
 
     Args:
         history: The agent conversation history list
-        format: Output format - "json", "pretty_json", "markdown", or "text"
+        output_format: Output format - "json", "pretty_json", "markdown", or "text"
         include_system: Whether to include system messages in the output
+        format: Deprecated alias for output_format (kept for compatibility)
 
     Returns:
         Formatted string representation of the agent context
@@ -31,20 +33,26 @@ def dump_agent_context(
     if not include_system:
         history_to_dump = [msg for msg in history if msg.get("role") != "system"]
 
-    if format == "json":
+    if format is not None:
+        # Backwards-compatible alias.
+        if output_format != "json" and format != output_format:
+            raise ValueError("Provide only one of 'output_format' or deprecated 'format'.")
+        output_format = format
+
+    if output_format == "json":
         return json.dumps(history_to_dump, indent=2)
 
-    elif format == "pretty_json":
+    elif output_format == "pretty_json":
         return json.dumps(history_to_dump, indent=2, ensure_ascii=False)
 
-    elif format == "markdown":
+    elif output_format == "markdown":
         return _format_as_markdown(history_to_dump)
 
-    elif format == "text":
+    elif output_format == "text":
         return _format_as_text(history_to_dump)
 
     else:
-        raise ValueError(f"Unknown format: {format}")
+        raise ValueError(f"Unknown format: {output_format}")
 
 
 def _format_as_markdown(history: list[dict[str, Any]]) -> str:
@@ -152,9 +160,10 @@ def _format_as_text(history: list[dict[str, Any]]) -> str:
 def save_agent_context(
     history: list[dict[str, Any]],
     filepath: str | Path,
-    format: str = "json",
+    output_format: str = "json",
     *,
     include_system: bool = True,
+    format: str | None = None,
 ) -> None:
     """
     Save agent context to a file.
@@ -162,10 +171,16 @@ def save_agent_context(
     Args:
         history: The agent conversation history
         filepath: Path where to save the context
-        format: Output format ("json", "pretty_json", "markdown", "text")
+        output_format: Output format ("json", "pretty_json", "markdown", "text")
         include_system: Whether to include system messages in the output
+        format: Deprecated alias for output_format (kept for compatibility)
     """
-    content = dump_agent_context(history, format, include_system=include_system)
+    content = dump_agent_context(
+        history,
+        output_format,
+        include_system=include_system,
+        format=format,
+    )
 
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)

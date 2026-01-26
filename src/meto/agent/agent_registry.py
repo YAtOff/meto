@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+from meto.agent.exceptions import ToolNotFoundError
 from meto.agent.tool_schema import TOOLS
 
 
@@ -41,4 +42,9 @@ def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]
         return TOOLS
     else:
         tools_by_name = {tool["function"]["name"]: tool for tool in TOOLS}
-        return [tools_by_name[name] for name in requested_tools if name in tools_by_name]
+        unknown = [name for name in requested_tools if name not in tools_by_name]
+        if unknown:
+            known = ", ".join(sorted(tools_by_name))
+            missing = ", ".join(unknown)
+            raise ToolNotFoundError(f"Unknown tool(s): {missing}. Known tools: {known}")
+        return [tools_by_name[name] for name in requested_tools]

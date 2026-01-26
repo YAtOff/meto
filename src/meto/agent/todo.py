@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-class TodoManger:
+class TodoManager:
     """Manages a structured todo list with enforced constraints.
 
     Constraints:
@@ -106,3 +106,7 @@ class TodoManger:
     def clear(self) -> None:
         """Clear all todos."""
         self.items.clear()
+
+
+# Backwards-compatibility alias (typo). Prefer TodoManager.
+TodoManger = TodoManager

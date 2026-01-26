@@ -426,7 +426,7 @@ def _export_history(
         save_agent_context(
             history,
             filepath,
-            format=export_format,
+            output_format=export_format,
             include_system=include_system,
         )
         print(f"Exported to {filepath}")
@@ -450,6 +450,10 @@ def _compact_history(history: list[dict[str, Any]]) -> None:
         for msg in history
         if msg["role"] in ("user", "assistant")
     )
+
+    if not settings.LLM_API_KEY:
+        print("METO_LLM_API_KEY is not set. Configure it in .env or environment variables.")
+        return
 
     client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 

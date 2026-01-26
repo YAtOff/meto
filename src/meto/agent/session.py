@@ -13,7 +13,7 @@ from typing import Any, override
 
 from rich.console import Console
 
-from meto.agent.todo import TodoManger
+from meto.agent.todo import TodoManager
 from meto.conf import settings
 
 logger = logging.getLogger("agent")
@@ -212,7 +212,7 @@ class Session:
     history: list[dict[str, Any]]
     session_logger_cls: type[SessionLogger]
     session_logger: SessionLogger
-    todos: TodoManger
+    todos: TodoManager
 
     def __init__(
         self, sid: str | None = None, session_logger_cls: type[SessionLogger] | None = None
@@ -226,7 +226,7 @@ class Session:
             self.session_id = generate_session_id()
             self.history = []
             self.session_logger = self.session_logger_cls(self.session_id)
-        self.todos = TodoManger()
+        self.todos = TodoManager()
 
     def clear(self) -> None:
         """Clear history and todos, start new session with new ID."""
@@ -239,7 +239,7 @@ class Session:
         """Generate new session ID with current history preserved."""
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
-        self.todos = TodoManger()
+        self.todos = TodoManager()
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])
