@@ -217,7 +217,9 @@ def _manage_todos(session: Session, items: list[dict[str, Any]]) -> str:
     """Update the todo list for a session."""
 
     try:
-        return session.todos.update(items)
+        result = session.todos.update(items)
+        session.todos.print_rich()
+        return result
     except Exception as e:
         return f"Error: {e}"
 

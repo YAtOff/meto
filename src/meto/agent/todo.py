@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from rich.console import Console
+
 
 class TodoManager:
     """Manages a structured todo list with enforced constraints.
@@ -106,6 +108,32 @@ class TodoManager:
     def clear(self) -> None:
         """Clear all todos."""
         self.items.clear()
+
+    def print_rich(self) -> None:
+        """Print todo list with rich formatting."""
+        console = Console()
+
+        if not self.items:
+            console.print("[dim]No todos.[/dim]")
+            return
+
+        for item in self.items:
+            if item["status"] == "completed":
+                console.print(f"[bold green][✓][/bold green] {item['content']}")
+            elif item["status"] == "in_progress":
+                console.print(
+                    f"[bold yellow][⚙️][/bold yellow] {item['content']} [dim]← {item['activeForm']}[/dim]"
+                )
+            else:
+                console.print(f"[dim][○] {item['content']}[/dim]")
+
+        completed = sum(1 for t in self.items if t["status"] == "completed")
+        total = len(self.items)
+        pct = int(completed / total * 100) if total else 0
+
+        console.print()
+        console.print(f"({completed}/{total} completed) ", end="")
+        console.print(f"[cyan]{completed * '█'}{(total - completed) * '░'}[/cyan] {pct}%")
 
 
 # Backwards-compatibility alias (typo). Prefer TodoManager.

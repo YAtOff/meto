@@ -223,7 +223,7 @@ def cmd_context(args: list[str], session: Session) -> None:
 def cmd_todos(args: list[str], session: Session) -> None:
     """Show current task list."""
     del args
-    print(session.todos.render())
+    session.todos.print_rich()
 
 
 def cmd_agents(args: list[str], session: Session) -> None:
