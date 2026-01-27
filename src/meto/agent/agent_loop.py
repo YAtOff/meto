@@ -175,6 +175,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     reasoning_logger,
                     agent.session,
                     agent.session.skill_loader,
+                    agent.yolo_mode,
                 )
 
                 # Run post_tool_use hooks

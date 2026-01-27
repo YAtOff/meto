@@ -38,6 +38,7 @@ def interactive_loop(
     prompt_text: str = ">>> ",
     session: Session | None = None,
     hooks_manager: HooksManager | None = None,
+    yolo_mode: bool = False,
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
@@ -48,7 +49,7 @@ def interactive_loop(
     if hooks_manager is None:
         hooks_manager = load_hooks_manager()
 
-    main_agent = Agent.main(session, hooks_manager=hooks_manager)
+    main_agent = Agent.main(session, hooks_manager=hooks_manager, yolo_mode=yolo_mode)
 
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
@@ -106,6 +107,13 @@ def run(
             help="Resume session by ID (format: timestamp-randomsuffix)",
         ),
     ] = None,
+    yolo: Annotated[
+        bool,
+        typer.Option(
+            "--yolo",
+            help="Skip permission prompts for tools.",
+        ),
+    ] = False,
 ) -> None:
     """Run meto."""
 
@@ -127,7 +135,7 @@ def run(
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        agent = Agent.main(session, hooks_manager=hooks_manager)
+        agent = Agent.main(session, hooks_manager=hooks_manager, yolo_mode=yolo)
         try:
             for output in run_agent_loop(text, agent):
                 print(output)
@@ -136,7 +144,7 @@ def run(
             raise typer.Exit(code=130) from None  # Standard exit code for SIGINT
         raise typer.Exit(code=0)
 
-    interactive_loop(session=session, hooks_manager=hooks_manager)
+    interactive_loop(session=session, hooks_manager=hooks_manager, yolo_mode=yolo)
 
 
 @app.command()

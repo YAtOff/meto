@@ -15,10 +15,12 @@ from urllib.request import Request, urlopen
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
+from prompt_toolkit.shortcuts import confirm
 
 from meto.agent.agent import Agent
 from meto.agent.session import Session
 from meto.agent.skill_loader import SkillLoader
+from meto.agent.tool_schema import PERMISSION_REQUIRED
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -335,6 +337,14 @@ def _ask_user_question(question: str) -> str:
         return f"(error getting user input: {ex})"
 
 
+def _prompt_permission(tool_name: str, detail: str) -> bool:
+    """Prompt user for tool permission using prompt_toolkit."""
+    try:
+        return confirm(f"Run {tool_name}: {detail}? ", suffix=" (y/n) ")
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
 def _load_skill(skill_name: str, skill_loader: SkillLoader) -> str:
     """Load skill content and return wrapped in XML tags."""
     try:
@@ -353,9 +363,18 @@ def run_tool(
     logger: Any | None = None,
     session: Session | None = None,
     skill_loader: SkillLoader | None = None,
+    yolo_mode: bool = False,
 ) -> str:
     if logger:
         logger.log_tool_selection(tool_name, parameters)
+
+    # Check permission if required and not in yolo mode
+    if not yolo_mode and PERMISSION_REQUIRED.get(tool_name, False):
+        detail = ""
+        if tool_name == "shell":
+            detail = parameters.get("command", "")
+        if not _prompt_permission(tool_name, detail):
+            return f"({tool_name} cancelled by user)"
 
     tool_output = ""
     try:

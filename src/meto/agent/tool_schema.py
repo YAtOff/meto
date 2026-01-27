@@ -280,6 +280,20 @@ TOOLS: list[dict[str, Any]] = [
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}
 AVAILABLE_TOOLS = list(TOOLS_BY_NAME.keys())
 
+# Maps tool name -> whether user permission is required before execution
+PERMISSION_REQUIRED: dict[str, bool] = {
+    "shell": True,
+    "list_dir": False,
+    "read_file": False,
+    "write_file": False,
+    "grep_search": False,
+    "fetch": False,
+    "manage_todos": False,
+    "run_task": False,
+    "ask_user_question": False,
+    "load_skill": False,
+}
+
 
 def populate_skill_descriptions(
     tools: list[dict[str, Any]], skills: dict[str, str]

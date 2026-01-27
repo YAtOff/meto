@@ -109,6 +109,11 @@ class Settings(BaseSettings):
         v.mkdir(parents=True, exist_ok=True)
         return v
 
+    YOLO_MODE: bool = Field(
+        default=False,
+        description="Skip permission prompts for tools.",
+    )
+
 
 # Global settings instance
 settings = Settings()

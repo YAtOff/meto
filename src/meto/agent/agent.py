@@ -17,9 +17,12 @@ class Agent:
     tools: list[dict[str, Any]]
     max_turns: int
     hooks_manager: HooksManager | None
+    yolo_mode: bool
 
     @classmethod
-    def main(cls, session: Session, hooks_manager: HooksManager | None = None) -> Agent:
+    def main(
+        cls, session: Session, hooks_manager: HooksManager | None = None, yolo_mode: bool = False
+    ) -> Agent:
         # The main agent uses the default system prompt and has access to all tools.
         # `prompt` is reserved for future per-agent system prompt customization.
         return cls(
@@ -29,6 +32,7 @@ class Agent:
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
             hooks_manager=hooks_manager,
+            yolo_mode=yolo_mode,
         )
 
     @classmethod
@@ -70,12 +74,14 @@ class Agent:
         allowed_tools: list[str] | str,
         max_turns: int,
         hooks_manager: HooksManager | None = None,
+        yolo_mode: bool = False,
     ) -> None:
         self.name = name
         self.prompt = prompt
         self.session = session
         self.max_turns = max_turns
         self.hooks_manager = hooks_manager
+        self.yolo_mode = yolo_mode
 
         # Get base tools for agent
         base_tools = get_tools_for_agent(allowed_tools)
