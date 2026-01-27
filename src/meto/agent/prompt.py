@@ -23,6 +23,11 @@ Subagent pattern (via run_task tool):
   - plan: Design-only (analyze, produce plan) - no modifications
   - code: Full access (implement features, fix bugs)
 - Subagents run with fresh history, keep main conversation clean
+
+Skills (via load_skill tool):
+- On-demand domain expertise for specialized tasks
+- Load only when needed for specific domains (e.g., PDF processing, code review)
+- Available skills shown in tool description
 """
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -15,6 +16,8 @@ from meto.agent.agent_loop import run_agent_loop
 from meto.agent.commands import handle_slash_command
 from meto.agent.exceptions import AgentInterrupted
 from meto.agent.session import Session, get_session_info, list_session_files
+from meto.agent.skill_loader import SkillLoader
+from meto.conf import settings
 
 app = typer.Typer(add_completion=False)
 
@@ -36,7 +39,9 @@ def interactive_loop(
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
-        session = Session()
+        # Create skill loader
+        skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
+        session = Session(skill_loader=skill_loader)
 
     agent = Agent.main(session)
 
@@ -97,7 +102,13 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    session = Session(session_id) if session_id else Session()
+    # Create skill loader
+    skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
+    session = (
+        Session(sid=session_id, skill_loader=skill_loader)
+        if session_id
+        else Session(skill_loader=skill_loader)
+    )
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())

@@ -5,6 +5,7 @@ from typing import Any
 from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
 from meto.agent.session import NullSessionLogger, Session
+from meto.agent.tool_schema import populate_skill_descriptions
 from meto.conf import settings
 
 
@@ -57,8 +58,17 @@ class Agent:
         self.name = name
         self.prompt = prompt
         self.session = session
-        self.tools = get_tools_for_agent(allowed_tools)
         self.max_turns = max_turns
+
+        # Get base tools for agent
+        base_tools = get_tools_for_agent(allowed_tools)
+
+        # Populate skill descriptions if skill_loader is available
+        if session.skill_loader:
+            skills = session.skill_loader.get_skill_descriptions()
+            self.tools = populate_skill_descriptions(base_tools, skills)
+        else:
+            self.tools = base_tools
 
     @property
     def tool_names(self) -> list[str]:

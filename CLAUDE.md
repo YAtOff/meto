@@ -34,12 +34,13 @@ uv tool install --editable .     # install as local tool
 - `src/meto/agent/agent.py` - Agent class with main/subagent factory methods
 - `src/meto/agent/agent_registry.py` - Built-in agents + user agent loader (YAML frontmatter + markdown)
 - `src/meto/agent/tool_schema.py` - Tool schemas (OpenAI function calling format)
-- `src/meto/agent/tool_runner.py` - Tool execution implementations (shell, file ops, grep, fetch, todos, subagents)
+- `src/meto/agent/tool_runner.py` - Tool execution implementations (shell, file ops, grep, fetch, todos, subagents, skills)
 - `src/meto/agent/session.py` - Session persistence (JSONL), history loading, session logging
 - `src/meto/agent/todo.py` - Structured task tracking with constraints
 - `src/meto/agent/commands.py` - Interactive slash commands (e.g. `/help`, `/export`, `/compact`, `/todos`)
 - `src/meto/agent/context.py` - Context export formats and summary helpers
 - `src/meto/agent/prompt.py` - System prompt building with AGENTS.md support
+- `src/meto/agent/skill_loader.py` - Skills discovery, lazy loading, and content management
 - `src/meto/conf.py` - Pydantic settings from `METO_*` env vars
 
 ### Agent Loop Pattern
@@ -60,6 +61,7 @@ Environment variables (`.env` supported):
 - `METO_TOOL_TIMEOUT_SECONDS` - Shell timeout (default: 300)
 - `METO_MAX_TOOL_OUTPUT_CHARS` - Max output (default: 50000)
 - `METO_AGENTS_DIR` - Directory for user-defined agents (default: .meto/agents)
+- `METO_SKILLS_DIR` - Directory for skill directories (default: .meto/skills)
 
 ### Custom Commands
 Slash commands can be defined as Markdown files in `.meto/commands/{name}.md`:
@@ -75,6 +77,53 @@ Custom agents can be defined as Markdown files in `.meto/agents/{name}.md`:
 - User agents override built-in agents with same name
 - See `AGENTS.md` for full documentation and examples
 
+### Skills System
+Skills are self-contained domain expertise modules loaded on-demand via the `load_skill` tool:
+
+**Directory Structure**:
+```
+.meto/skills/
+├── commit-message/
+│   └── SKILL.md
+├── pdf/
+│   ├── SKILL.md
+│   └── scripts/
+└── code-review/
+    └── SKILL.md
+```
+
+**SKILL.md Format**:
+- YAML frontmatter with `name` (optional, defaults to directory name) and `description` (required)
+- Markdown body contains detailed domain instructions (~2000 tokens)
+- Can reference additional resources in skill directory
+
+**Key Characteristics**:
+- **Lazy Loading**: Metadata loaded at startup, full content loaded only when `load_skill` tool is called
+- **Progressive Disclosure**: Skill descriptions shown in tool schema, full content injected as tool result
+- **XML Wrapping**: Content wrapped in `<skill-loaded name="...">...</skill-loaded>` tags for clarity
+- **Per-Session Caching**: Loaded skills cached in memory to avoid re-reading files
+- **No Tool Restrictions**: Skills provide knowledge, not execution context (unlike agents)
+
+**Differences from Commands and Agents**:
+| Feature | Commands | Agents | Skills |
+|---------|----------|--------|--------|
+| Purpose | Workflow shortcuts | Execution contexts | Domain expertise |
+| Location | `.meto/commands/*.md` | `.meto/agents/*.md` | `.meto/skills/*/SKILL.md` |
+| When Applied | Interactive mode | Subagent spawning | On-demand via tool |
+| Knowledge Scope | Workflow orchestration | Tool permissions + prompt | Deep domain knowledge |
+
+**Example Skill** (`.meto/skills/commit-message/SKILL.md`):
+```markdown
+---
+name: commit-message
+description: Generate conventional commit messages following best practices
+---
+
+# Commit Message Skill
+
+You are an expert at writing clear, informative git commit messages...
+```
+
 ### Key Architecture Notes
 - Tool schema (`tool_schema.py`) MUST stay import-light, separate from runtime (`tool_runner.py`)
 - Agent loop uses OpenAI SDK via LiteLLM proxy (model-agnostic)
@@ -82,3 +131,4 @@ Custom agents can be defined as Markdown files in `.meto/agents/{name}.md`:
 - Sessions persist as JSONL in `~/.meto/sessions/`
 - Todo system enforces: max 20 items, only one in_progress at a time
 - Built-in agents: explore (read-only), plan (design-only), code (full access)
+- Skills system: lazy-loaded expertise modules injected via tool results (preserves prompt cache)

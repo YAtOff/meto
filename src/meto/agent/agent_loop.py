@@ -138,7 +138,13 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     arguments = {}
 
                 # Execute tool (logging happens inside the tool runner)
-                tool_output = run_tool(fn_name, arguments, reasoning_logger, agent.session)
+                tool_output = run_tool(
+                    fn_name,
+                    arguments,
+                    reasoning_logger,
+                    agent.session,
+                    agent.session.skill_loader,
+                )
 
                 agent.session.history.append(
                     {

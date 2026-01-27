@@ -18,6 +18,7 @@ from prompt_toolkit.enums import EditingMode
 
 from meto.agent.agent import Agent
 from meto.agent.session import Session
+from meto.agent.skill_loader import SkillLoader
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -334,11 +335,24 @@ def _ask_user_question(question: str) -> str:
         return f"(error getting user input: {ex})"
 
 
+def _load_skill(skill_name: str, skill_loader: SkillLoader) -> str:
+    """Load skill content and return wrapped in XML tags."""
+    try:
+        content = skill_loader.get_skill_content(skill_name)
+        # Wrap in XML for clear boundaries
+        return f'<skill-loaded name="{skill_name}">\n{content}\n</skill-loaded>'
+    except ValueError as e:
+        return f"Error: {e}"
+    except Exception as e:
+        return f"Error: Failed to load skill '{skill_name}': {e}"
+
+
 def run_tool(
     tool_name: str,
     parameters: dict[str, Any],
     logger: Any | None = None,
     session: Session | None = None,
+    skill_loader: SkillLoader | None = None,
 ) -> str:
     if logger:
         logger.log_tool_selection(tool_name, parameters)
@@ -383,6 +397,12 @@ def run_tool(
         elif tool_name == "ask_user_question":
             question = parameters.get("question", "")
             tool_output = _ask_user_question(question)
+        elif tool_name == "load_skill":
+            if skill_loader is None:
+                tool_output = "Error: skill_loader not available"
+            else:
+                skill_name = parameters.get("skill_name", "")
+                tool_output = _load_skill(skill_name, skill_loader)
         else:
             tool_output = f"Error: Unknown tool: {tool_name}"
 
