@@ -77,7 +77,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
             # Our history is intentionally JSON-shaped, so treat these as dynamic.
             messages: Any = [
-                {"role": "system", "content": build_system_prompt()},
+                {"role": "system", "content": build_system_prompt(agent.session)},
                 *agent.session.history,
             ]
 

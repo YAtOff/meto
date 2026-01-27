@@ -1,5 +1,9 @@
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from meto.agent.session import Session
 
 # Base system prompt template.
 # The final system prompt used for each model call is built by appending
@@ -31,17 +35,35 @@ Skills (via load_skill tool):
 """
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(session: "Session | None" = None) -> str:
     """Build the system prompt.
 
     Appends project memory/user instructions from AGENTS.md in the current
     working directory.
+
+    Args:
+        session: Optional session for plan mode context
 
     Note: This intentionally does not cache; it re-reads AGENTS.md each call.
     """
 
     cwd = os.getcwd()
     prompt = SYSTEM_PROMPT.format(cwd=cwd)
+
+    # Add plan mode context if active
+    if session and session.plan_mode:
+        prompt += """
+
+----- PLAN MODE ACTIVE -----
+You are in PLAN MODE. Follow this workflow:
+Phase 1: Use explore/plan agents to understand the codebase and design approach
+Phase 2: Design implementation with numbered steps
+Phase 3: Use /done to exit plan mode with cleared context for implementation
+
+- Use run_task tool with explore/plan agents for systematic planning
+- Do NOT make file modifications during planning
+- Output structured plans for implementation
+----- END PLAN MODE -----"""
 
     agents_path = Path(cwd) / "AGENTS.md"
     begin = "----- BEGIN AGENTS.md (project instructions) -----"

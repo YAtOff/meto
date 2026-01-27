@@ -366,6 +366,63 @@ def cmd_agents(args: list[str], session: Session) -> None:
         print(f"               tools: {tools_str}")
 
 
+def cmd_plan(args: list[str], session: Session) -> None:
+    """Enter plan mode for systematic exploration and planning."""
+    del args
+    if session.plan_mode:
+        print("Already in plan mode. Exit with /done")
+        return
+    session.enter_plan_mode()
+    print("Plan mode entered. Use explore/plan agents, exit with /done")
+
+
+def cmd_done(args: list[str], session: Session) -> None:
+    """Exit plan mode, auto-convert planning to todos, and clear context."""
+    del args
+    if not session.plan_mode:
+        print("Not in plan mode.")
+        return
+
+    summary = session.exit_plan_mode()
+
+    # Auto-convert recent planning output to todos
+    # Look for numbered lists in recent assistant messages
+    todos_created = 0
+    import re
+
+    numbered_pattern = re.compile(r"^\d+\.\s+(.+)$", re.MULTILINE)
+
+    for msg in reversed(session.history):
+        if msg["role"] == "assistant" and msg.get("content"):
+            content = msg["content"]
+            matches = numbered_pattern.findall(content)
+            if matches and len(matches) >= 2:  # Only if we found multiple steps
+                new_todos = []
+                for match in matches[:20]:  # Max 20 todos
+                    step_text = match.strip()
+                    # Create todo item with proper structure
+                    new_todos.append(
+                        {
+                            "content": step_text,
+                            "status": "pending",
+                            "activeForm": f"Working on: {step_text[:40]}..."
+                            if len(step_text) > 40
+                            else f"Working on: {step_text}",
+                        }
+                    )
+                try:
+                    session.todos.update(new_todos)
+                    todos_created = len(new_todos)
+                except Exception:
+                    pass  # Skip if validation fails
+                break  # Only process the first matching assistant message
+
+    session.clear()
+    print(f"Plan mode exited. {summary}")
+    if todos_created > 0:
+        print(f"{todos_created} todos created from planning.")
+
+
 COMMANDS: dict[str, SlashCommandSpec] = {
     "/agents": SlashCommandSpec(
         handler=cmd_agents,
@@ -383,6 +440,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
         handler=cmd_context,
         description="Show a summary of the current context",
     ),
+    "/done": SlashCommandSpec(
+        handler=cmd_done,
+        description="Exit plan mode + clear context",
+    ),
     "/export": SlashCommandSpec(
         handler=cmd_export,
         description="Export conversation to a file (multiple formats)",
@@ -391,6 +452,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     "/help": SlashCommandSpec(
         handler=cmd_help,
         description="Show this help",
+    ),
+    "/plan": SlashCommandSpec(
+        handler=cmd_plan,
+        description="Enter plan mode",
     ),
     "/quit": SlashCommandSpec(
         handler=cmd_quit,

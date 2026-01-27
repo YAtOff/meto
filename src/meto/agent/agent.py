@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
+from meto.agent.agent_registry import PLAN_MODE_PROMPTS, get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
 from meto.agent.hooks import HooksManager
 from meto.agent.session import NullSessionLogger, Session
@@ -36,11 +36,14 @@ class Agent:
         )
 
     @classmethod
-    def subagent(cls, name: str) -> Agent:
+    def subagent(cls, name: str, plan_mode: bool = False) -> Agent:
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
         if agent_config:
+            # Use plan mode prompt if available and in plan mode
             prompt = agent_config["prompt"]
+            if plan_mode and name in PLAN_MODE_PROMPTS:
+                prompt = PLAN_MODE_PROMPTS[name]
             allowed_tools = agent_config.get("tools", [])
             return cls(
                 name=name,

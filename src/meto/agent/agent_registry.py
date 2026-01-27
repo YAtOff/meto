@@ -46,6 +46,26 @@ BUILTIN_AGENTS: dict[str, AgentConfig] = {
     },
 }
 
+# Enhanced prompts for plan mode
+PLAN_MODE_PROMPTS: dict[str, str] = {
+    "explore": """PLAN MODE exploration agent. Analyze codebase systematically for implementation planning:
+1. Identify all files requiring changes
+2. Map dependencies between components
+3. Note any technical constraints or risks
+4. Summarize findings for implementation planning
+
+- Do NOT make changes
+- Return structured analysis""",
+    "plan": """PLAN MODE planning agent. Create comprehensive implementation plan:
+1. Break down feature into numbered implementation steps
+2. Identify required resources and dependencies
+3. Note potential implementation challenges
+4. Estimate effort for major components
+
+- Output numbered implementation plan only
+- No file modifications allowed""",
+}
+
 
 def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]]:
     if requested_tools == "*":

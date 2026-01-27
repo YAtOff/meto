@@ -53,8 +53,10 @@ def interactive_loop(
 
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
+        # Dynamic prompt based on plan mode
+        current_prompt = "[PLAN] >>> " if session.plan_mode else (prompt_text or ">>> ")
         try:
-            user_input: str = prompt_session.prompt(prompt_text)
+            user_input: str = prompt_session.prompt(current_prompt)
         except (EOFError, KeyboardInterrupt):
             # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return

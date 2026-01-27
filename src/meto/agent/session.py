@@ -212,6 +212,7 @@ class Session:
     session_logger: SessionLogger
     todos: TodoManager
     skill_loader: SkillLoader | None
+    plan_mode: bool
 
     def __init__(
         self,
@@ -230,6 +231,7 @@ class Session:
             self.history = []
             self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
+        self.plan_mode = False
 
     def clear(self) -> None:
         """Clear history and todos, start new session with new ID."""
@@ -237,12 +239,14 @@ class Session:
         self.todos.clear()
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
+        self.plan_mode = False
 
     def renew(self) -> None:
         """Generate new session ID with current history preserved."""
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
+        self.plan_mode = False
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])
@@ -250,3 +254,21 @@ class Session:
                 self.session_logger.log_assistant(msg["content"], msg.get("tool_calls"))
             elif msg["role"] == "tool":
                 self.session_logger.log_tool(msg["tool_call_id"], msg["content"])
+
+    def enter_plan_mode(self) -> None:
+        """Enter plan mode for systematic exploration and planning."""
+        self.plan_mode = True
+
+    def exit_plan_mode(self) -> str:
+        """Exit plan mode and return summary of planning session.
+
+        Returns:
+            Summary text of planning session
+        """
+        self.plan_mode = False
+        # Generate summary from recent history
+        if not self.history:
+            return "No planning history."
+        # Count planning-related messages
+        planning_msgs = sum(1 for msg in self.history if msg["role"] in ("user", "assistant"))
+        return f"Planning session complete: {planning_msgs} messages exchanged."
