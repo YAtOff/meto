@@ -10,23 +10,15 @@ Supports YAML frontmatter metadata with markdown body for prompts.
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Any, TypedDict
 
-import yaml
-
 from meto.agent.exceptions import ToolNotFoundError
+from meto.agent.frontmatter_loader import parse_yaml_frontmatter
 from meto.agent.tool_schema import TOOLS, TOOLS_BY_NAME
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
-
-# Regex to match YAML frontmatter between --- delimiters
-FRONTMATTER_PATTERN = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
-
-# Cache for loaded user agents
-_user_agents_cache: dict[str, AgentConfig] | None = None
 
 
 class AgentConfig(TypedDict):
@@ -35,7 +27,8 @@ class AgentConfig(TypedDict):
     prompt: str
 
 
-AGENTS: dict[str, AgentConfig] = {
+# Built-in agent configurations
+BUILTIN_AGENTS: dict[str, AgentConfig] = {
     "explore": {
         "description": "Read-only exploration - search, find files, analyze code",
         "tools": ["shell", "list_dir", "read_file", "grep_search", "fetch"],
@@ -67,25 +60,6 @@ def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]
         return [tools_by_name[name] for name in requested_tools]
 
 
-def parse_yaml_frontmatter(content: str) -> dict[str, Any]:
-    """Parse YAML frontmatter from markdown content.
-
-    Args:
-        content: Full file content with potential frontmatter
-
-    Returns:
-        Dict with 'metadata' (parsed YAML) and 'body' (remaining content)
-    """
-    match = FRONTMATTER_PATTERN.match(content)
-    if match:
-        yaml_block, body = match.groups()
-        metadata = yaml.safe_load(yaml_block) or {}
-        return {"metadata": metadata, "body": body.strip()}
-    else:
-        # No frontmatter found, treat entire content as body
-        return {"metadata": {}, "body": content.strip()}
-
-
 def validate_agent_config(config: dict[str, Any]) -> list[str]:
     """Validate agent configuration.
 
@@ -111,6 +85,8 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
         if tools == "*":
             pass  # All tools allowed
         elif isinstance(tools, list):
+            if not tools:
+                errors.append("'tools' list cannot be empty")
             for tool in tools:
                 if tool not in TOOLS_BY_NAME:
                     errors.append(f"Unknown tool '{tool}' in tools list")
@@ -171,66 +147,148 @@ def parse_agent_file(path: Path) -> AgentConfig | None:
         return None
 
 
-def discover_agents(agents_dir: Path) -> dict[str, AgentConfig]:
-    """Discover and parse user-defined agent files.
+class AgentLoader:
+    """Lazy-load agents: built-in + user-defined agents from .meto/agents/."""
 
-    Args:
-        agents_dir: Directory to scan for agent files
+    agents_dir: Path
+    _user_agents: dict[str, AgentConfig] | None
+    _all_agents_cache: dict[str, AgentConfig] | None
 
-    Returns:
-        Dict mapping agent names to AgentConfig
-    """
-    if not agents_dir.exists():
-        logger.debug(f"Agents directory {agents_dir} does not exist, skipping user agents")
-        return {}
+    def __init__(self, agents_dir: Path):
+        """Initialize agent loader.
 
-    if not agents_dir.is_dir():
-        logger.warning(f"Agents directory {agents_dir} is not a directory, skipping")
-        return {}
+        Args:
+            agents_dir: Path to directory containing user agent files
+        """
+        self.agents_dir = agents_dir
+        self._user_agents = None
+        self._all_agents_cache = None
 
-    agents: dict[str, AgentConfig] = {}
+    def _discover_agents(self) -> dict[str, AgentConfig]:
+        """Discover and parse user-defined agent files.
 
-    for path in sorted(agents_dir.glob("*.md")):
-        if path.is_file():
-            agent_config = parse_agent_file(path)
-            if agent_config:
-                name = path.stem
-                agents[name] = agent_config
-                logger.debug(f"Loaded user agent '{name}' from {path}")
+        Returns:
+            Dict mapping agent names to AgentConfig
+        """
+        if not self.agents_dir.exists():
+            logger.debug(f"Agents directory {self.agents_dir} does not exist, skipping user agents")
+            return {}
 
-    return agents
+        if not self.agents_dir.is_dir():
+            logger.warning(f"Agents directory {self.agents_dir} is not a directory, skipping")
+            return {}
+
+        agents: dict[str, AgentConfig] = {}
+
+        for path in sorted(self.agents_dir.glob("*.md")):
+            if path.is_file():
+                agent_config = parse_agent_file(path)
+                if agent_config:
+                    name = path.stem
+                    agents[name] = agent_config
+                    logger.debug(f"Loaded user agent '{name}' from {path}")
+
+        return agents
+
+    def _load_user_agents(self) -> dict[str, AgentConfig]:
+        """Load user agents with caching.
+
+        Returns:
+            Dict mapping agent names to AgentConfig
+        """
+        if self._user_agents is None:
+            self._user_agents = self._discover_agents()
+        return self._user_agents
+
+    def get_all_agents(self) -> dict[str, AgentConfig]:
+        """Load all agents (built-in + user-defined).
+
+        User agents override built-in agents with the same name.
+
+        Returns:
+            Dict mapping agent names to AgentConfig
+        """
+        if self._all_agents_cache is not None:
+            return self._all_agents_cache
+
+        # Start with built-in agents
+        all_agents = dict(BUILTIN_AGENTS)
+
+        # Merge user agents (overrides built-ins)
+        user_agents = self._load_user_agents()
+        for name, config in user_agents.items():
+            if name in all_agents:
+                logger.info(f"User agent '{name}' overrides built-in agent")
+            all_agents[name] = config
+
+        self._all_agents_cache = all_agents
+        return all_agents
+
+    def list_agents(self) -> list[str]:
+        """Return list of all available agent names.
+
+        Returns:
+            Sorted list of agent names
+        """
+        return sorted(self.get_all_agents().keys())
+
+    def has_agent(self, agent_name: str) -> bool:
+        """Check if an agent exists.
+
+        Args:
+            agent_name: Name of agent to check
+
+        Returns:
+            True if agent exists, False otherwise
+        """
+        return agent_name in self.get_all_agents()
+
+    def get_agent_config(self, agent_name: str) -> AgentConfig:
+        """Get configuration for a specific agent.
+
+        Args:
+            agent_name: Name of agent to get
+
+        Returns:
+            AgentConfig for the agent
+
+        Raises:
+            ValueError: If agent not found
+        """
+        all_agents = self.get_all_agents()
+        if agent_name not in all_agents:
+            available = ", ".join(sorted(all_agents.keys()))
+            raise ValueError(
+                f"Agent '{agent_name}' not found. Available agents: {available or '(none)'}"
+            )
+        return all_agents[agent_name]
+
+    def clear_cache(self) -> None:
+        """Clear all caches.
+
+        Useful for testing or when agent files change.
+        """
+        self._user_agents = None
+        self._all_agents_cache = None
 
 
-def load_all_agents(agents_dir: Path) -> dict[str, AgentConfig]:
-    """Load all agents (built-in + user-defined).
+# Global agent loader instance (lazy initialization)
+_agent_loader: AgentLoader | None = None
 
-    User agents override built-in agents with the same name.
+
+def get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
+    """Get or create the global agent loader instance.
 
     Args:
         agents_dir: Directory to scan for user agent files
 
     Returns:
-        Dict mapping agent names to AgentConfig
+        AgentLoader instance
     """
-    global _user_agents_cache
-
-    # Use cache if available
-    if _user_agents_cache is None:
-        user_agents = discover_agents(agents_dir)
-        _user_agents_cache = user_agents
-    else:
-        user_agents = _user_agents_cache
-
-    # Start with built-in agents
-    all_agents = dict(AGENTS)
-
-    # Merge user agents (overrides built-ins)
-    for name, config in user_agents.items():
-        if name in all_agents:
-            logger.info(f"User agent '{name}' overrides built-in agent")
-        all_agents[name] = config
-
-    return all_agents
+    global _agent_loader
+    if _agent_loader is None:
+        _agent_loader = AgentLoader(agents_dir if agents_dir else Path(settings.AGENTS_DIR))
+    return _agent_loader
 
 
 def clear_agent_cache() -> None:
@@ -238,8 +296,9 @@ def clear_agent_cache() -> None:
 
     Useful for testing or when agent files change.
     """
-    global _user_agents_cache
-    _user_agents_cache = None
+    global _agent_loader
+    if _agent_loader is not None:
+        _agent_loader.clear_cache()
 
 
 def get_all_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
@@ -253,4 +312,5 @@ def get_all_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
     Returns:
         Dict mapping agent names to AgentConfig
     """
-    return load_all_agents(agents_dir if agents_dir else Path(settings.AGENTS_DIR))
+    loader = get_agent_loader(agents_dir)
+    return loader.get_all_agents()

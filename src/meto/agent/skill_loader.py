@@ -7,16 +7,12 @@ Each skill is a directory containing SKILL.md with YAML frontmatter + markdown b
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 from typing import Any, TypedDict
 
-import yaml
+from meto.agent.frontmatter_loader import parse_yaml_frontmatter
 
 logger = logging.getLogger(__name__)
-
-# Regex to match YAML frontmatter between --- delimiters
-FRONTMATTER_PATTERN = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 
 
 class SkillMetadata(TypedDict):
@@ -34,25 +30,6 @@ class SkillConfig(TypedDict):
     description: str
     content: str
     resources: list[str]
-
-
-def parse_yaml_frontmatter(content: str) -> dict[str, Any]:
-    """Parse YAML frontmatter from markdown content.
-
-    Args:
-        content: Full file content with potential frontmatter
-
-    Returns:
-        Dict with 'metadata' (parsed YAML) and 'body' (remaining content)
-    """
-    match = FRONTMATTER_PATTERN.match(content)
-    if match:
-        yaml_block, body = match.groups()
-        metadata = yaml.safe_load(yaml_block) or {}
-        return {"metadata": metadata, "body": body.strip()}
-    else:
-        # No frontmatter found, treat entire content as body
-        return {"metadata": {}, "body": content.strip()}
 
 
 def validate_skill_config(config: dict[str, Any]) -> list[str]:
