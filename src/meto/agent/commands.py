@@ -21,6 +21,7 @@ Command precedence:
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import datetime
 import re
@@ -472,57 +473,22 @@ def _parse_export_args(args: list[str]) -> tuple[str, str, bool]:
       - Default format is json
       - Default is to EXCLUDE system messages unless --full is provided
     """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("path", nargs="?", default="")
+    parser.add_argument(
+        "format", nargs="?", default="json", choices={"json", "pretty_json", "markdown", "text"}
+    )
+    parser.add_argument(
+        "-f", "--format", dest="format_flag", choices={"json", "pretty_json", "markdown", "text"}
+    )
+    parser.add_argument("--full", "--include-system", action="store_true")
 
-    supported_formats = {"json", "pretty_json", "markdown", "text"}
-    export_format = "json"
-    include_system = False
-    export_target = ""
-
-    # First, capture a positional path (if present) until we hit flags.
-    positionals: list[str] = []
-    i = 0
-    while i < len(args) and not args[i].startswith("-"):
-        positionals.append(args[i])
-        i += 1
-
-    # Remaining args are flags (and their values).
-    while i < len(args):
-        tok = args[i]
-
-        if tok in ("--full", "--include-system"):
-            include_system = True
-            i += 1
-            continue
-
-        if tok in ("--format", "-f"):
-            if i + 1 >= len(args):
-                raise ValueError("/export: missing value for --format")
-            candidate = args[i + 1]
-            if candidate not in supported_formats:
-                raise ValueError(f"/export: unsupported format: {candidate}")
-            export_format = candidate
-            i += 2
-            continue
-
-        raise ValueError(f"/export: unknown option: {tok}")
-
-    # Interpret positionals.
-    if len(positionals) == 0:
-        export_target = ""
-    elif len(positionals) == 1:
-        export_target = positionals[0]
-    elif len(positionals) == 2:
-        export_target = positionals[0]
-        candidate_format = positionals[1]
-        if candidate_format not in supported_formats:
-            raise ValueError(
-                "/export: second positional must be a format (json|pretty_json|markdown|text)"
-            )
-        export_format = candidate_format
-    else:
-        raise ValueError("/export: too many positional arguments")
-
-    return export_target, export_format, include_system
+    try:
+        ns = parser.parse_args(args)
+        export_format = ns.format_flag or ns.format
+        return ns.path, export_format, ns.full
+    except argparse.ArgumentError as e:
+        raise ValueError(str(e)) from e
 
 
 def _export_history(
