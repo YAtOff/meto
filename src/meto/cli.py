@@ -15,6 +15,7 @@ from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.commands import handle_slash_command
 from meto.agent.exceptions import AgentInterrupted
+from meto.agent.hooks import HooksManager, load_hooks_manager
 from meto.agent.session import Session, get_session_info, list_session_files
 from meto.agent.skill_loader import SkillLoader
 from meto.conf import settings
@@ -36,6 +37,7 @@ def _strip_single_trailing_newline(text: str) -> str:
 def interactive_loop(
     prompt_text: str = ">>> ",
     session: Session | None = None,
+    hooks_manager: HooksManager | None = None,
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
@@ -43,7 +45,10 @@ def interactive_loop(
         skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
         session = Session(skill_loader=skill_loader)
 
-    main_agent = Agent.main(session)
+    if hooks_manager is None:
+        hooks_manager = load_hooks_manager()
+
+    main_agent = Agent.main(session, hooks_manager=hooks_manager)
 
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
@@ -111,8 +116,9 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Create skill loader
+    # Create skill loader and hooks manager
     skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
+    hooks_manager = load_hooks_manager()
     session = (
         Session(sid=session_id, skill_loader=skill_loader)
         if session_id
@@ -121,7 +127,7 @@ def run(
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        agent = Agent.main(session)
+        agent = Agent.main(session, hooks_manager=hooks_manager)
         try:
             for output in run_agent_loop(text, agent):
                 print(output)
@@ -130,7 +136,7 @@ def run(
             raise typer.Exit(code=130) from None  # Standard exit code for SIGINT
         raise typer.Exit(code=0)
 
-    interactive_loop(session=session)
+    interactive_loop(session=session, hooks_manager=hooks_manager)
 
 
 @app.command()

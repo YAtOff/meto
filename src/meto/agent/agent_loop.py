@@ -58,6 +58,13 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
     reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
     try:
+        # Run session_start hooks (only for main agent with hooks_manager)
+        if agent.hooks_manager:
+            agent.hooks_manager.run_hooks(
+                "session_start",
+                session_id=agent.session.session_id,
+            )
+
         reasoning_logger.log_user_input(prompt)
         agent.session.history.append({"role": "user", "content": prompt})
         agent.session.session_logger.log_user(prompt)
@@ -137,6 +144,30 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 else:
                     arguments = {}
 
+                # Run pre_tool_use hooks
+                if agent.hooks_manager:
+                    hook_results = agent.hooks_manager.run_hooks(
+                        "pre_tool_use",
+                        session_id=agent.session.session_id,
+                        tool=fn_name,
+                        tool_call_id=tc_any.id,
+                        params=arguments,
+                    )
+                    # Check if any hook blocked the tool
+                    blocked_hooks = [r for r in hook_results if r.blocked]
+                    if blocked_hooks:
+                        hook_names = ", ".join(r.hook_name for r in blocked_hooks)
+                        block_msg = f"Tool blocked by hook: {hook_names}"
+                        agent.session.history.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_any.id,
+                                "content": block_msg,
+                            }
+                        )
+                        agent.session.session_logger.log_tool(tc_any.id, block_msg)
+                        continue
+
                 # Execute tool (logging happens inside the tool runner)
                 tool_output = run_tool(
                     fn_name,
@@ -145,6 +176,17 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     agent.session,
                     agent.session.skill_loader,
                 )
+
+                # Run post_tool_use hooks
+                if agent.hooks_manager:
+                    agent.hooks_manager.run_hooks(
+                        "post_tool_use",
+                        session_id=agent.session.session_id,
+                        tool=fn_name,
+                        tool_call_id=tc_any.id,
+                        params=arguments,
+                        result=tool_output[:1000] if tool_output else None,  # Truncate for hooks
+                    )
 
                 agent.session.history.append(
                     {

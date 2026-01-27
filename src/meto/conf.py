@@ -83,6 +83,11 @@ class Settings(BaseSettings):
         description="Directory to scan for skill directories.",
     )
 
+    HOOKS_FILE: Path = Field(
+        default=Path.cwd() / ".meto" / "hooks.yaml",
+        description="Path to hooks configuration file.",
+    )
+
     # --- Logging ---
 
     LOG_DIR: Path = Field(

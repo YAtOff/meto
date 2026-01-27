@@ -4,6 +4,7 @@ from typing import Any
 
 from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
+from meto.agent.hooks import HooksManager
 from meto.agent.session import NullSessionLogger, Session
 from meto.agent.tool_schema import populate_skill_descriptions
 from meto.conf import settings
@@ -15,9 +16,10 @@ class Agent:
     session: Session
     tools: list[dict[str, Any]]
     max_turns: int
+    hooks_manager: HooksManager | None
 
     @classmethod
-    def main(cls, session: Session) -> Agent:
+    def main(cls, session: Session, hooks_manager: HooksManager | None = None) -> Agent:
         # The main agent uses the default system prompt and has access to all tools.
         # `prompt` is reserved for future per-agent system prompt customization.
         return cls(
@@ -26,6 +28,7 @@ class Agent:
             session=session,
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
+            hooks_manager=hooks_manager,
         )
 
     @classmethod
@@ -41,6 +44,7 @@ class Agent:
                 session=Session(session_logger_cls=NullSessionLogger),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
+                hooks_manager=None,  # Subagents don't run hooks
             )
         else:
             # Build helpful error message with available agents
@@ -55,6 +59,7 @@ class Agent:
             session=Session(session_logger_cls=NullSessionLogger),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
+            hooks_manager=None,  # Forked agents don't run hooks
         )
 
     def __init__(
@@ -64,11 +69,13 @@ class Agent:
         session: Session,
         allowed_tools: list[str] | str,
         max_turns: int,
+        hooks_manager: HooksManager | None = None,
     ) -> None:
         self.name = name
         self.prompt = prompt
         self.session = session
         self.max_turns = max_turns
+        self.hooks_manager = hooks_manager
 
         # Get base tools for agent
         base_tools = get_tools_for_agent(allowed_tools)

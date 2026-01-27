@@ -1,0 +1,16 @@
+# Example hooks configuration
+# Hooks run shell commands at lifecycle points: pre_tool_use, post_tool_use, session_start
+
+hooks:
+  # Log all shell commands to audit file
+  - name: "audit-shell"
+    event: "post_tool_use"
+    tools: ["shell"]
+    command: |
+      $hook = $env:HOOK_INPUT_JSON | ConvertFrom-Json; $cmd = $hook.params.command; if ($null -eq $cmd) { $cmd = "" }; $ts = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"); $log = Join-Path $HOME ".meto\shell_audit.log"; Add-Content -Path $log -Value ("[{0}] shell: {1}" -f $ts, $cmd)
+
+  - name: "run-linter"
+    event: "post_tool_use"
+    tools: ["write_file"]
+    command: |
+      just lint
