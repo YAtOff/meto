@@ -47,6 +47,16 @@ class Agent:
             available = ", ".join(sorted(all_agents.keys()))
             raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
+    @classmethod
+    def fork(cls, allowed_tools: list[str] | str) -> Agent:
+        return cls(
+            name="fork",
+            prompt="",
+            session=Session(session_logger_cls=NullSessionLogger),
+            allowed_tools=allowed_tools,
+            max_turns=settings.SUBAGENT_MAX_TURNS,
+        )
+
     def __init__(
         self,
         name: str,

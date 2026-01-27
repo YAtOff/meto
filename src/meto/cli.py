@@ -43,7 +43,7 @@ def interactive_loop(
         skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
         session = Session(skill_loader=skill_loader)
 
-    agent = Agent.main(session)
+    main_agent = Agent.main(session)
 
     prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
@@ -54,13 +54,22 @@ def interactive_loop(
             return
 
         # Handle slash commands
-        was_handled, custom_prompt = handle_slash_command(user_input, session)
+        was_handled, cmd_result = handle_slash_command(user_input, session)
 
         if was_handled:
-            # If custom command provided a prompt, run agent loop with it
-            if custom_prompt:
+            # If custom command provided a result, run agent loop with it
+            if cmd_result:
                 try:
-                    for output in run_agent_loop(custom_prompt, agent):
+                    # Choose agent based on context
+                    if cmd_result.context == "fork":
+                        if cmd_result.agent:
+                            agent = Agent.subagent(cmd_result.agent)
+                        else:
+                            agent = Agent.fork(cmd_result.allowed_tools or "*")
+                    else:
+                        agent = main_agent
+
+                    for output in run_agent_loop(cmd_result.prompt, agent):
                         print(output)
                 except AgentInterrupted:
                     print("\n[Agent interrupted]")
@@ -69,7 +78,7 @@ def interactive_loop(
 
         # No slash command, run agent loop with user input
         try:
-            for output in run_agent_loop(user_input, agent):
+            for output in run_agent_loop(user_input, main_agent):
                 print(output)
         except AgentInterrupted:
             print("\n[Agent interrupted]")

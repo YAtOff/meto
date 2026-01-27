@@ -34,6 +34,7 @@ from openai import OpenAI
 
 from meto.agent.agent_registry import get_all_agents
 from meto.agent.context import format_context_summary, save_agent_context
+from meto.agent.frontmatter_loader import parse_yaml_frontmatter
 from meto.agent.session import Session
 from meto.conf import settings
 
@@ -45,6 +46,18 @@ class SlashCommandSpec:
     handler: SlashCommandHandler
     description: str
     usage: str | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CustomCommandSpec:
+    """Parsed custom command from .meto/commands/*.md."""
+
+    name: str
+    description: str
+    body: str
+    allowed_tools: list[str] | None  # None = all tools
+    context: str | None  # "fork" or None
+    agent: str | None  # subagent name if context=fork
 
 
 def _parse_slash_command_argv(text: str) -> list[str]:
@@ -115,32 +128,104 @@ def _find_custom_command_file(command: str) -> Path | None:
     return command_path if command_path.is_file() else None
 
 
-def _load_custom_command_prompt(command_path: Path) -> str:
-    """Load and return contents of custom command file.
+def _load_custom_command(command_path: Path) -> CustomCommandSpec:
+    """Load and parse custom command file with YAML frontmatter.
 
     Args:
         command_path: Path to the custom command .md file
 
     Returns:
-        File contents as string
+        CustomCommandSpec with parsed metadata and body
 
     Raises:
-        ValueError: If file cannot be read
+        ValueError: If file cannot be read or parsed
     """
     try:
-        return command_path.read_text(encoding="utf-8")
+        content = command_path.read_text(encoding="utf-8")
     except OSError as e:
         raise ValueError(f"Failed to read custom command file: {e}") from e
     except UnicodeDecodeError as e:
         raise ValueError(f"Failed to decode custom command file: {e}") from e
+
+    parsed = parse_yaml_frontmatter(content)
+    metadata = parsed["metadata"]
+    body = parsed["body"]
+
+    return CustomCommandSpec(
+        name=metadata.get("name", command_path.stem),
+        description=metadata.get("description", ""),
+        body=body,
+        allowed_tools=metadata.get("allowed-tools"),
+        context=metadata.get("context"),
+        agent=metadata.get("agent"),
+    )
+
+
+# Regex to match $ARGUMENTS[N] where N is a non-negative integer
+_ARG_INDEX_PATTERN = re.compile(r"\$ARGUMENTS\[(\d+)\]")
+
+
+class ArgumentSubstitutionError(Exception):
+    """Raised when argument substitution fails."""
+
+
+def _substitute_arguments(body: str, args: list[str]) -> str:
+    """Substitute $ARGUMENTS and $ARGUMENTS[N] placeholders in command body.
+
+    Args:
+        body: Command body text with potential placeholders
+        args: List of arguments to substitute
+
+    Returns:
+        Body with placeholders replaced
+
+    Raises:
+        ArgumentSubstitutionError: If $ARGUMENTS[N] references out-of-bounds index
+    """
+    substituted = False
+
+    # First, replace $ARGUMENTS[N] patterns
+    def replace_indexed(match: re.Match[str]) -> str:
+        nonlocal substituted
+        index = int(match.group(1))
+        if index >= len(args):
+            raise ArgumentSubstitutionError(
+                f"$ARGUMENTS[{index}] out of bounds (only {len(args)} args provided)"
+            )
+        substituted = True
+        return args[index]
+
+    result = _ARG_INDEX_PATTERN.sub(replace_indexed, body)
+
+    # Then, replace $ARGUMENTS with all args joined
+    if "$ARGUMENTS" in result:
+        result = result.replace("$ARGUMENTS", " ".join(args))
+        substituted = True
+
+    # If no substitution and args present, append ARGUMENTS: <value>
+    if not substituted and args:
+        args_text = " ".join(shlex.quote(arg) for arg in args)
+        result = f"{result}\n\nARGUMENTS: {args_text}"
+
+    return result
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CustomCommandResult:
+    """Result of executing a custom command."""
+
+    prompt: str
+    context: str | None  # "fork" or None
+    agent: str | None  # subagent name if context=fork
+    allowed_tools: list[str] | None  # tool restrictions (None = all)
 
 
 def _execute_custom_command(
     args: list[str],
     command_path: Path,
     session: Session,
-) -> str:
-    """Execute custom command by loading file content and appending arguments.
+) -> CustomCommandResult:
+    """Execute custom command by loading file, parsing frontmatter, substituting args.
 
     Args:
         args: Command arguments (if any)
@@ -148,20 +233,28 @@ def _execute_custom_command(
         session: Session instance (for potential future use)
 
     Returns:
-        Prompt string to pass to agent loop
+        CustomCommandResult with prompt and execution context
 
     Raises:
         ValueError: If file cannot be loaded
+        ArgumentSubstitutionError: If argument substitution fails
     """
     del session  # Unused for now, reserved for future use
-    base_prompt = _load_custom_command_prompt(command_path)
+    spec = _load_custom_command(command_path)
 
-    # If args provided, append them to the prompt
-    if args:
-        args_text = " ".join(shlex.quote(arg) for arg in args)
-        return f"{base_prompt}\n\n[Command arguments: {args_text}]"
+    # Warn if agent set without context: fork
+    if spec.agent and spec.context != "fork":
+        print(f"Warning: 'agent: {spec.agent}' has no effect without 'context: fork'")
 
-    return base_prompt
+    # Substitute arguments into body
+    prompt = _substitute_arguments(spec.body, args)
+
+    return CustomCommandResult(
+        prompt=prompt,
+        context=spec.context,
+        agent=spec.agent,
+        allowed_tools=spec.allowed_tools,
+    )
 
 
 def cmd_clear(args: list[str], session: Session) -> None:
@@ -171,14 +264,48 @@ def cmd_clear(args: list[str], session: Session) -> None:
     print("History cleared.")
 
 
+def _get_custom_commands() -> dict[str, CustomCommandSpec]:
+    """Discover all custom commands in .meto/commands/ directory.
+
+    Returns:
+        Dict mapping command name (with /) to CustomCommandSpec
+    """
+    commands_dir = Path.cwd() / ".meto" / "commands"
+    if not commands_dir.is_dir():
+        return {}
+
+    result: dict[str, CustomCommandSpec] = {}
+    for path in commands_dir.glob("*.md"):
+        try:
+            spec = _load_custom_command(path)
+            cmd_name = f"/{spec.name}"
+            result[cmd_name] = spec
+        except (ValueError, OSError):
+            # Skip invalid command files
+            continue
+
+    return result
+
+
 def cmd_help(args: list[str], session: Session) -> None:
     """Show help for available commands."""
     del args, session  # Unused
-    print("Available commands:")
+
+    # Built-in commands
+    print("Built-in commands:")
     for name in sorted(COMMANDS):
         spec = COMMANDS[name]
         usage = spec.usage or name
         print(f"  {usage:<15} - {spec.description}")
+
+    # Custom commands
+    custom_commands = _get_custom_commands()
+    if custom_commands:
+        print("\nCustom commands:")
+        for name in sorted(custom_commands):
+            spec = custom_commands[name]
+            desc = spec.description or "(no description)"
+            print(f"  {name:<15} - {desc}")
 
 
 def cmd_quit(args: list[str], session: Session) -> None:
@@ -278,7 +405,7 @@ COMMANDS: dict[str, SlashCommandSpec] = {
 def handle_slash_command(
     user_input: str,
     session: Session,
-) -> tuple[bool, str | None]:
+) -> tuple[bool, CustomCommandResult | None]:
     """Handle slash commands.
 
     Args:
@@ -286,9 +413,9 @@ def handle_slash_command(
         session: Session instance
 
     Returns:
-        Tuple of (was_handled, custom_prompt):
+        Tuple of (was_handled, result):
         - was_handled: True if command was processed (built-in or custom)
-        - custom_prompt: If custom command executed, contains prompt for agent loop;
+        - result: If custom command executed, contains CustomCommandResult;
           None for built-in commands or errors
     """
     candidate = user_input.lstrip()
@@ -321,9 +448,9 @@ def handle_slash_command(
     custom_command_path = _find_custom_command_file(command)
     if custom_command_path is not None:
         try:
-            custom_prompt = _execute_custom_command(args, custom_command_path, session)
-            return True, custom_prompt
-        except ValueError as e:
+            result = _execute_custom_command(args, custom_command_path, session)
+            return True, result
+        except (ValueError, ArgumentSubstitutionError) as e:
             print(f"Custom command error: {e}")
             return True, None
 

@@ -1,6 +1,9 @@
 ---
-allowed-tools: shell(git add:*), shell(git status:*), shell(git commit:*)
+name: commit
 description: Create a git commit
+allowed-tools:
+   - shell
+context: fork
 ---
 
 ## Context
