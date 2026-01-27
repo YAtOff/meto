@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import signal
 from collections.abc import Generator
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
 from openai import OpenAI
 
-from meto.agent.exceptions import MaxStepsExceededError
+from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.log import ReasoningLogger
 from meto.agent.prompt import build_system_prompt
 from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
@@ -38,10 +39,22 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
     In interactive mode, this function is called repeatedly and shares module
     state (`agent.session.history`) so the conversation continues.
+
+    Raises:
+        AgentInterrupted: If the user interrupts with Ctrl-C during execution.
     """
 
     if not prompt.strip():
         return
+
+    # Set up signal handler for graceful Ctrl-C interruption
+    interrupted = False
+
+    def signal_handler(_signum: int, _frame: Any) -> None:
+        nonlocal interrupted
+        interrupted = True
+
+    original_handler = signal.signal(signal.SIGINT, signal_handler)
 
     reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
     try:
@@ -50,6 +63,10 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
         agent.session.session_logger.log_user(prompt)
 
         for _turn in range(agent.max_turns):
+            # Check for interruption at the start of each turn
+            if interrupted:
+                reasoning_logger.log_loop_completion("Interrupted by user (Ctrl-C)")
+                raise AgentInterrupted("Agent loop interrupted by user")
             # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
             # Our history is intentionally JSON-shaped, so treat these as dynamic.
             messages: Any = [
@@ -135,4 +152,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
         reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
         raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")
     finally:
+        # Restore original signal handler
+        signal.signal(signal.SIGINT, original_handler)
         reasoning_logger.close()

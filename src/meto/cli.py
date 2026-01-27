@@ -13,6 +13,7 @@ from prompt_toolkit.enums import EditingMode
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.commands import handle_slash_command
+from meto.agent.exceptions import AgentInterrupted
 from meto.agent.session import Session, get_session_info, list_session_files
 
 app = typer.Typer(add_completion=False)
@@ -53,14 +54,20 @@ def interactive_loop(
         if was_handled:
             # If custom command provided a prompt, run agent loop with it
             if custom_prompt:
-                for output in run_agent_loop(custom_prompt, agent):
-                    print(output)
+                try:
+                    for output in run_agent_loop(custom_prompt, agent):
+                        print(output)
+                except AgentInterrupted:
+                    print("\n[Agent interrupted]")
             # Otherwise, built-in command was executed, continue to next iteration
             continue
 
         # No slash command, run agent loop with user input
-        for output in run_agent_loop(user_input, agent):
-            print(output)
+        try:
+            for output in run_agent_loop(user_input, agent):
+                print(output)
+        except AgentInterrupted:
+            print("\n[Agent interrupted]")
 
 
 @app.callback(invoke_without_command=True)
@@ -95,8 +102,12 @@ def run(
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
         agent = Agent.main(session)
-        for output in run_agent_loop(text, agent):
-            print(output)
+        try:
+            for output in run_agent_loop(text, agent):
+                print(output)
+        except AgentInterrupted:
+            print("\n[Agent interrupted]", file=sys.stderr)
+            raise typer.Exit(code=130) from None  # Standard exit code for SIGINT
         raise typer.Exit(code=0)
 
     interactive_loop(session=session)

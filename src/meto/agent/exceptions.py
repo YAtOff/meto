@@ -16,3 +16,9 @@ class ToolExecutionError(AgentError):
 
 class ToolNotFoundError(AgentError):
     pass
+
+
+class AgentInterrupted(AgentError):
+    """Raised when the agent loop is interrupted by user (Ctrl-C)."""
+
+    pass
