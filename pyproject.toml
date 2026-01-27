@@ -163,6 +163,7 @@ reportUnreachable = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportUnknownMemberType = false
+reportCallInDefaultInitializer = false
 
 [tool.codespell]
 # Add here as needed:
