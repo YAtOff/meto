@@ -305,7 +305,7 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
             return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
     except URLError as e:
         return f"Error fetching {url}: {e}"
-    except Exception as ex:  # noqa: BLE001
+    except Exception as ex:
         return f"Error fetching {url}: {ex}"
 
 
@@ -431,6 +431,9 @@ def run_tool(
             else:
                 skill_name = parameters.get("skill_name", "")
                 tool_output = _load_skill(skill_name, skill_loader)
+                if logger:
+                    logger.log_skill_loaded(skill_name)
+
         else:
             tool_output = f"Error: Unknown tool: {tool_name}"
 

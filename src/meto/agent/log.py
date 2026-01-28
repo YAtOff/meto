@@ -146,6 +146,11 @@ class ReasoningLogger:
         else:
             self.console.print(f"[green]✓ {tool_name}[/]")
 
+    def log_skill_loaded(self, skill_name: str) -> None:
+        """Log when a skill is loaded."""
+        self._log(logging.INFO, f"Skill loaded: {skill_name}")
+        self.console.print(f"[dim]ℹ️  Skill loaded: {skill_name}[/]")
+
     def log_loop_completion(self, reason: str):
         """Log why the agent loop ended."""
         self._log(
