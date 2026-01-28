@@ -70,6 +70,7 @@ Workflow:
 
 - Use run_task tool with explore/plan agents for systematic planning
 - Do NOT make file modifications during planning (except the plan file)
+- At the end of each plan, give me a list of unresolved questions to answer, if any.
 - Your final action MUST be writing the plan to {plan_file}
 ----- END PLAN MODE -----"""
 
