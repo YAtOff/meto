@@ -377,12 +377,12 @@ def run_tool(
         logger.log_tool_selection(tool_name, parameters)
 
     # Check permission if required and not in yolo mode
-    if not yolo_mode and PERMISSION_REQUIRED.get(tool_name, False):
-        detail = ""
-        if tool_name == "shell":
-            detail = parameters.get("command", "")
-        if not _prompt_permission(tool_name, detail):
-            return f"({tool_name} cancelled by user)"
+    if not yolo_mode:
+        if permission_config := PERMISSION_REQUIRED.get(tool_name, None):
+            if permission_config.is_required(parameters):
+                detail = permission_config.prompt_detail(parameters)
+                if not _prompt_permission(tool_name, detail):
+                    return f"({tool_name} cancelled by user)"
 
     tool_output = ""
     try:

@@ -2,13 +2,13 @@
 
 Built-in commands are registered in the COMMANDS dict.
 
-Custom commands can be defined as Markdown files in $PWD/.meto/commands/{command}.md.
+Custom commands can be defined as Markdown files in {settings.COMMANDS_DIR}/{command}.md.
 When an unknown slash command is entered, the corresponding .md file is searched
 for and, if found, its contents are used as a prompt for the agent loop.
 
 Custom command files:
 - Must be named {command}.md (e.g., code-review.md)
-- Must be located in $PWD/.meto/commands/
+- Must be located in {settings.COMMANDS_DIR}
 - Should contain the prompt text to be sent to the agent
 - Can receive arguments, which are appended to the prompt as:
   [Command arguments: arg1 arg2 ...]
@@ -51,7 +51,7 @@ class SlashCommandSpec:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class CustomCommandSpec:
-    """Parsed custom command from .meto/commands/*.md."""
+    """Parsed custom command from {settings.COMMANDS_DIR}/*.md."""
 
     name: str
     description: str
@@ -110,7 +110,7 @@ def _validate_command_name(command: str) -> str:
 
 
 def _find_custom_command_file(command: str) -> Path | None:
-    """Search for custom command file in $PWD/.meto/commands/{command}.md.
+    """Search for custom command file in {settings.COMMANDS_DIR}/{command}.md.
 
     Args:
         command: Command string (may or may not start with /)
@@ -123,8 +123,8 @@ def _find_custom_command_file(command: str) -> Path | None:
     except ValueError:
         return None
 
-    # Construct path: $PWD/.meto/commands/{command}.md
-    command_path = Path.cwd() / ".meto" / "commands" / f"{command_name}.md"
+    # Construct path: {settings.COMMANDS_DIR}/{command}.md
+    command_path = settings.COMMANDS_DIR / f"{command_name}.md"
 
     return command_path if command_path.is_file() else None
 
@@ -266,12 +266,12 @@ def cmd_clear(args: list[str], session: Session) -> None:
 
 
 def _get_custom_commands() -> dict[str, CustomCommandSpec]:
-    """Discover all custom commands in .meto/commands/ directory.
+    """Discover all custom commands in commands directory.
 
     Returns:
         Dict mapping command name (with /) to CustomCommandSpec
     """
-    commands_dir = Path.cwd() / ".meto" / "commands"
+    commands_dir = settings.COMMANDS_DIR
     if not commands_dir.is_dir():
         return {}
 

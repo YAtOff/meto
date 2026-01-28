@@ -83,6 +83,11 @@ class Settings(BaseSettings):
         description="Directory to scan for user-defined agent files.",
     )
 
+    COMMANDS_DIR: Path = Field(
+        default=Path.cwd() / ".meto" / "commands",
+        description="Directory to scan for user-defined command files.",
+    )
+
     SKILLS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "skills",
         description="Directory to scan for skill directories.",
