@@ -417,7 +417,40 @@ def cmd_done(args: list[str], session: Session) -> None:
                     pass  # Skip if validation fails
                 break  # Only process the first matching assistant message
 
-    session.clear()
+    # Extract plan history before clearing/renewing
+    plan_history = session.extract_plan_history()
+
+    if plan_history:
+        # Renew preserves history, creates new session_id
+        session.renew()
+        # Format plan content concisely
+        plan_summary_parts = []
+        for msg in plan_history:
+            role = msg["role"].upper()
+            content = msg.get("content", "")
+            if content:
+                plan_summary_parts.append(f"[{role}]: {content[:200]}...")
+
+        plan_context = "\n\n".join(plan_summary_parts)
+        session.history.insert(
+            0,
+            {
+                "role": "system",
+                "content": f"""PLAN CONTEXT (from previous planning session):
+
+{plan_context}
+
+---
+This plan was created in the previous session. Use it as reference for implementation.
+""",
+            },
+        )
+        print(f"Plan context preserved ({len(plan_history)} messages).")
+    else:
+        # No plan context - clear completely
+        session.clear()
+        print("No plan context found to preserve.")
+
     print(f"Plan mode exited. {summary}")
     if todos_created > 0:
         print(f"{todos_created} todos created from planning.")

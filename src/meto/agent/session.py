@@ -272,3 +272,20 @@ class Session:
         # Count planning-related messages
         planning_msgs = sum(1 for msg in self.history if msg["role"] in ("user", "assistant"))
         return f"Planning session complete: {planning_msgs} messages exchanged."
+
+    def extract_plan_history(self) -> list[dict[str, Any]]:
+        """Extract plan mode conversation from history.
+
+        Returns messages from /plan command to current point.
+        """
+        # Find where plan mode started
+        plan_start_idx = -1
+        for i, msg in enumerate(self.history):
+            if msg["role"] == "user" and "/plan" in msg.get("content", ""):
+                plan_start_idx = i
+                break
+
+        if plan_start_idx == -1:
+            return []
+
+        return self.history[plan_start_idx:].copy()
