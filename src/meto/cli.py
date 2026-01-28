@@ -71,9 +71,9 @@ def interactive_loop(
                     # Choose agent based on context
                     if cmd_result.context == "fork":
                         if cmd_result.agent:
-                            agent = Agent.subagent(cmd_result.agent)
+                            agent = Agent.subagent(cmd_result.agent, yolo_mode=yolo_mode)
                         else:
-                            agent = Agent.fork(cmd_result.allowed_tools or "*")
+                            agent = Agent.fork(cmd_result.allowed_tools or "*", yolo_mode=yolo_mode)
                     else:
                         agent = main_agent
 
@@ -110,12 +110,12 @@ def run(
         ),
     ] = None,
     yolo: Annotated[
-        bool,
+        bool | None,
         typer.Option(
             "--yolo",
-            help="Skip permission prompts for tools.",
+            help="Skip permission prompts for tools (default: from YOLO_MODE setting).",
         ),
-    ] = False,
+    ] = None,
 ) -> None:
     """Run meto."""
 
@@ -135,9 +135,12 @@ def run(
         else Session(skill_loader=skill_loader)
     )
 
+    # Use settings.YOLO_MODE as fallback when --yolo not explicitly passed
+    yolo_mode = yolo if yolo is not None else settings.YOLO_MODE
+
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
-        agent = Agent.main(session, hooks_manager=hooks_manager, yolo_mode=yolo)
+        agent = Agent.main(session, hooks_manager=hooks_manager, yolo_mode=yolo_mode)
         try:
             for output in run_agent_loop(text, agent):
                 print(output)
@@ -146,7 +149,7 @@ def run(
             raise typer.Exit(code=130) from None  # Standard exit code for SIGINT
         raise typer.Exit(code=0)
 
-    interactive_loop(session=session, hooks_manager=hooks_manager, yolo_mode=yolo)
+    interactive_loop(session=session, hooks_manager=hooks_manager, yolo_mode=yolo_mode)
 
 
 @app.command()

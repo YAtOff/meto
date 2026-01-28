@@ -310,7 +310,11 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
 
 
 def _execute_task(
-    prompt: str, agent_name: str, description: str | None = None, plan_mode: bool = False
+    prompt: str,
+    agent_name: str,
+    description: str | None = None,
+    plan_mode: bool = False,
+    yolo_mode: bool = False,
 ) -> str:
     """Execute task in isolated subagent via direct `run_agent_loop` call."""
     _ = description  # Reserved for future progress display
@@ -318,7 +322,7 @@ def _execute_task(
     from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
 
     try:
-        agent = Agent.subagent(agent_name, plan_mode=plan_mode)
+        agent = Agent.subagent(agent_name, plan_mode=plan_mode, yolo_mode=yolo_mode)
         # Allow subagents that have access to `run_task` to spawn further subagents.
         output = "\n".join(run_agent_loop(prompt, agent))
         return _truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
@@ -417,7 +421,7 @@ def run_tool(
             prompt = cast(str, parameters.get("prompt", ""))
             agent_name = cast(str, parameters.get("agent_name", ""))
             plan_mode = session.plan_mode if session else False
-            tool_output = _execute_task(prompt, agent_name, description, plan_mode)
+            tool_output = _execute_task(prompt, agent_name, description, plan_mode, yolo_mode)
         elif tool_name == "ask_user_question":
             question = parameters.get("question", "")
             tool_output = _ask_user_question(question)

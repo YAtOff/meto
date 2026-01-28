@@ -36,7 +36,7 @@ class Agent:
         )
 
     @classmethod
-    def subagent(cls, name: str, plan_mode: bool = False) -> Agent:
+    def subagent(cls, name: str, plan_mode: bool = False, yolo_mode: bool = False) -> Agent:
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
         if agent_config:
@@ -52,6 +52,7 @@ class Agent:
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
                 hooks_manager=None,  # Subagents don't run hooks
+                yolo_mode=yolo_mode,
             )
         else:
             # Build helpful error message with available agents
@@ -59,7 +60,7 @@ class Agent:
             raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     @classmethod
-    def fork(cls, allowed_tools: list[str] | str) -> Agent:
+    def fork(cls, allowed_tools: list[str] | str, yolo_mode: bool = False) -> Agent:
         return cls(
             name="fork",
             prompt="",
@@ -67,6 +68,7 @@ class Agent:
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
             hooks_manager=None,  # Forked agents don't run hooks
+            yolo_mode=yolo_mode,
         )
 
     def __init__(
