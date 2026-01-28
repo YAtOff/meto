@@ -331,7 +331,9 @@ def _ask_user_question(question: str) -> str:
 
     session = PromptSession(editing_mode=EditingMode.EMACS)
     try:
-        response = session.prompt(f"{question} ")
+        response = session.prompt(
+            f"[bold yellow]?[/bold yellow] [bold cyan]{question}[/bold cyan]\n[dim]Your answer:[/] "
+        )
         return response
     except (EOFError, KeyboardInterrupt):
         return "(user cancelled input)"
