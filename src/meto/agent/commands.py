@@ -36,7 +36,7 @@ from openai import OpenAI
 from meto.agent.agent_registry import get_all_agents
 from meto.agent.context import format_context_summary, save_agent_context
 from meto.agent.frontmatter_loader import parse_yaml_frontmatter
-from meto.agent.session import Session
+from meto.agent.session import Session, generate_session_id
 from meto.conf import settings
 
 SlashCommandHandler = Callable[[list[str], Session], None]
@@ -372,88 +372,41 @@ def cmd_plan(args: list[str], session: Session) -> None:
     if session.plan_mode:
         print("Already in plan mode. Exit with /done")
         return
-    session.enter_plan_mode()
-    print("Plan mode entered. Use explore/plan agents, exit with /done")
+    plan_file = session.enter_plan_mode()
+    print(f"Plan mode entered. Save your plan to: {plan_file}")
+    print("Exit with /done")
 
 
 def cmd_done(args: list[str], session: Session) -> None:
-    """Exit plan mode, auto-convert planning to todos, and clear context."""
+    """Exit plan mode, clear context, and insert plan instruction."""
     del args
     if not session.plan_mode:
         print("Not in plan mode.")
         return
 
-    summary = session.exit_plan_mode()
+    plan_file, plan_content = session.exit_plan_mode()
+    session.plan_mode = False
 
-    # Auto-convert recent planning output to todos
-    # Look for numbered lists in recent assistant messages
-    todos_created = 0
-    import re
+    # Clear history completely
+    session.history.clear()
+    session.session_id = generate_session_id()
+    session.session_logger = session.session_logger_cls(session.session_id)
 
-    numbered_pattern = re.compile(r"^\d+\.\s+(.+)$", re.MULTILINE)
-
-    for msg in reversed(session.history):
-        if msg["role"] == "assistant" and msg.get("content"):
-            content = msg["content"]
-            matches = numbered_pattern.findall(content)
-            if matches and len(matches) >= 2:  # Only if we found multiple steps
-                new_todos = []
-                for match in matches[:20]:  # Max 20 todos
-                    step_text = match.strip()
-                    # Create todo item with proper structure
-                    new_todos.append(
-                        {
-                            "content": step_text,
-                            "status": "pending",
-                            "activeForm": f"Working on: {step_text[:40]}..."
-                            if len(step_text) > 40
-                            else f"Working on: {step_text}",
-                        }
-                    )
-                try:
-                    session.todos.update(new_todos)
-                    todos_created = len(new_todos)
-                except Exception:
-                    pass  # Skip if validation fails
-                break  # Only process the first matching assistant message
-
-    # Extract plan history before clearing/renewing
-    plan_history = session.extract_plan_history()
-
-    if plan_history:
-        # Renew preserves history, creates new session_id
-        session.renew()
-        # Format plan content concisely
-        plan_summary_parts = []
-        for msg in plan_history:
-            role = msg["role"].upper()
-            content = msg.get("content", "")
-            if content:
-                plan_summary_parts.append(f"[{role}]: {content[:200]}...")
-
-        plan_context = "\n\n".join(plan_summary_parts)
-        session.history.insert(
-            0,
+    # Insert plan instruction if plan file exists
+    if plan_file and plan_content:
+        session.history.append(
             {
                 "role": "system",
-                "content": f"""PLAN CONTEXT (from previous planning session):
+                "content": f"""FOLLOW THE PLAN stored in: {plan_file}
 
-{plan_context}
+Read the plan file and follow the implementation steps defined in it.
 
----
-This plan was created in the previous session. Use it as reference for implementation.
-""",
-            },
+Use the Read tool to read the full plan file and implement the steps.""",
+            }
         )
-        print(f"Plan context preserved ({len(plan_history)} messages).")
+        print(f"History cleared. Follow the plan in: {plan_file}")
     else:
-        # No plan context - clear completely
-        session.clear()
-        print("No plan context found to preserve.")
-
-    print(f"Plan mode exited. {summary}")
-    if todos_created > 0:
-        print(f"{todos_created} todos created from planning.")
+        print(f"History cleared. No plan file found at: {plan_file}")
 
 
 COMMANDS: dict[str, SlashCommandSpec] = {

@@ -67,9 +67,14 @@ class Settings(BaseSettings):
         description="Directory to store session files.",
     )
 
-    @field_validator("SESSION_DIR")
+    PLAN_DIR: Path = Field(
+        default=Path.home() / ".meto" / "plans",
+        description="Directory to store plan files.",
+    )
+
+    @field_validator("SESSION_DIR", "PLAN_DIR")
     @classmethod
-    def ensure_session_dir(cls, v: Path) -> Path:
+    def ensure_dir_exists(cls, v: Path) -> Path:
         v.mkdir(parents=True, exist_ok=True)
         return v
 

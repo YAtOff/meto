@@ -52,17 +52,25 @@ def build_system_prompt(session: "Session | None" = None) -> str:
 
     # Add plan mode context if active
     if session and session.plan_mode:
-        prompt += """
+        plan_file = session.plan_file or "PLAN_FILE_NOT_SET"
+        prompt += f"""
 
 ----- PLAN MODE ACTIVE -----
-You are in PLAN MODE. Follow this workflow:
-Phase 1: Use explore/plan agents to understand the codebase and design approach
-Phase 2: Design implementation with numbered steps
-Phase 3: Use /done to exit plan mode with cleared context for implementation
+You are in PLAN MODE. Your goal is to create a plan and save it to a file.
+
+PLAN FILE: {plan_file}
+
+CRITICAL: You MUST save your final plan to this file using the Write tool.
+
+Workflow:
+1. Use explore/plan agents to understand the codebase
+2. Design implementation with numbered steps
+3. Write the plan to: {plan_file}
+4. Use /done to exit plan mode
 
 - Use run_task tool with explore/plan agents for systematic planning
-- Do NOT make file modifications during planning
-- Output structured plans for implementation
+- Do NOT make file modifications during planning (except the plan file)
+- Your final action MUST be writing the plan to {plan_file}
 ----- END PLAN MODE -----"""
 
     agents_path = Path(cwd) / "AGENTS.md"

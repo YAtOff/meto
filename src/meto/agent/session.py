@@ -213,6 +213,7 @@ class Session:
     todos: TodoManager
     skill_loader: SkillLoader | None
     plan_mode: bool
+    plan_file: Path | None
 
     def __init__(
         self,
@@ -232,6 +233,7 @@ class Session:
             self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
         self.plan_mode = False
+        self.plan_file = None
 
     def clear(self) -> None:
         """Clear history and todos, start new session with new ID."""
@@ -240,6 +242,7 @@ class Session:
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
         self.plan_mode = False
+        self.plan_file = None
 
     def renew(self) -> None:
         """Generate new session ID with current history preserved."""
@@ -247,6 +250,7 @@ class Session:
         self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
         self.plan_mode = False
+        self.plan_file = None
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])
@@ -255,23 +259,39 @@ class Session:
             elif msg["role"] == "tool":
                 self.session_logger.log_tool(msg["tool_call_id"], msg["content"])
 
-    def enter_plan_mode(self) -> None:
-        """Enter plan mode for systematic exploration and planning."""
-        self.plan_mode = True
-
-    def exit_plan_mode(self) -> str:
-        """Exit plan mode and return summary of planning session.
+    def enter_plan_mode(self) -> Path:
+        """Enter plan mode for systematic exploration and planning.
 
         Returns:
-            Summary text of planning session
+            Path to the plan file where the plan should be saved
+        """
+        self.plan_mode = True
+        # Generate unique plan file path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
+        plan_filename = f"plan-{timestamp}-{random_suffix}.md"
+        self.plan_file = settings.PLAN_DIR / plan_filename
+        return self.plan_file
+
+    def exit_plan_mode(self) -> tuple[Path | None, str | None]:
+        """Exit plan mode and return plan file info.
+
+        Returns:
+            Tuple of (plan_file_path, plan_content)
         """
         self.plan_mode = False
-        # Generate summary from recent history
-        if not self.history:
-            return "No planning history."
-        # Count planning-related messages
-        planning_msgs = sum(1 for msg in self.history if msg["role"] in ("user", "assistant"))
-        return f"Planning session complete: {planning_msgs} messages exchanged."
+        plan_file = self.plan_file
+        plan_content = None
+
+        # Read plan file if it exists
+        if plan_file and plan_file.exists():
+            try:
+                plan_content = plan_file.read_text(encoding="utf-8")
+            except OSError:
+                plan_content = None
+
+        # Don't clear plan_file yet - caller needs it
+        return plan_file, plan_content
 
     def extract_plan_history(self) -> list[dict[str, Any]]:
         """Extract plan mode conversation from history.
