@@ -7,6 +7,7 @@ Each skill is a directory containing SKILL.md with YAML frontmatter + markdown b
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -207,8 +208,15 @@ class SkillLoader:
         return skill_name in self._skills
 
 
-# Global skill loader instance (lazy initialization)
-_skill_loader: SkillLoader | None = None
+@lru_cache(maxsize=16)
+def _get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
+    """Return a cached skill loader instance.
+
+    The cache key is the resolved skills directory path.
+    """
+
+    resolved = skills_dir if skills_dir is not None else Path(settings.SKILLS_DIR)
+    return SkillLoader(resolved)
 
 
 def get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
@@ -220,10 +228,7 @@ def get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
     Returns:
         SkillLoader instance
     """
-    global _skill_loader
-    if _skill_loader is None:
-        _skill_loader = SkillLoader(skills_dir if skills_dir else Path(settings.SKILLS_DIR))
-    return _skill_loader
+    return _get_skill_loader(skills_dir)
 
 
 def clear_skill_cache() -> None:
@@ -231,5 +236,4 @@ def clear_skill_cache() -> None:
 
     Useful for testing or when skill files change.
     """
-    global _skill_loader
-    _skill_loader = None
+    _get_skill_loader.cache_clear()

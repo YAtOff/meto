@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, cast
 from openai import OpenAI
 
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
+from meto.agent.hooks import get_hooks_manager
 from meto.agent.log import ReasoningLogger
 from meto.agent.prompt import build_system_prompt
 from meto.agent.skill_loader import get_skill_loader
@@ -76,9 +77,11 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
     reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
     try:
-        # Run session_start hooks (only for main agent with hooks_manager)
-        if agent.hooks_manager:
-            agent.hooks_manager.run_hooks(
+        hooks_manager = get_hooks_manager() if agent.run_hooks else None
+
+        # Run session_start hooks (only for agents that opt into hooks)
+        if hooks_manager:
+            hooks_manager.run_hooks(
                 "session_start",
                 session_id=agent.session.session_id,
             )
@@ -163,8 +166,8 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     arguments = {}
 
                 # Run pre_tool_use hooks
-                if agent.hooks_manager:
-                    hook_results = agent.hooks_manager.run_hooks(
+                if hooks_manager:
+                    hook_results = hooks_manager.run_hooks(
                         "pre_tool_use",
                         session_id=agent.session.session_id,
                         tool=fn_name,
@@ -198,8 +201,8 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 )
 
                 # Run post_tool_use hooks
-                if agent.hooks_manager:
-                    agent.hooks_manager.run_hooks(
+                if hooks_manager:
+                    hooks_manager.run_hooks(
                         "post_tool_use",
                         session_id=agent.session.session_id,
                         tool=fn_name,

@@ -13,11 +13,14 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+from meto.conf import settings
 
 logger = logging.getLogger("hooks")
 
@@ -248,8 +251,21 @@ class HooksManager:
             )
 
 
-# Convenience function for loading hooks from default location
-def load_hooks_manager() -> HooksManager:
-    """Load hooks from .meto/hooks.yaml in current directory."""
-    hooks_path = Path.cwd() / ".meto" / "hooks.yaml"
-    return HooksManager.load(hooks_path)
+@lru_cache(maxsize=1)
+def get_hooks_manager() -> HooksManager:
+    """Return the process-global hooks manager.
+
+    Hooks are configured via :data:`meto.conf.settings.HOOKS_FILE`.
+    The manager is loaded lazily and cached for the lifetime of the process.
+    """
+
+    return HooksManager.load(settings.HOOKS_FILE)
+
+
+def reset_hooks_manager_cache() -> None:
+    """Clear the cached hooks manager.
+
+    Primarily used in tests or when the hooks file is modified during runtime.
+    """
+
+    get_hooks_manager.cache_clear()

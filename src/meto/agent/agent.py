@@ -15,7 +15,6 @@ from typing import Any
 
 from meto.agent.agent_registry import PLAN_MODE_PROMPTS, get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
-from meto.agent.hooks import HooksManager
 from meto.agent.session import NullSessionLogger, Session
 from meto.agent.skill_loader import get_skill_loader
 from meto.agent.tool_schema import populate_skill_descriptions
@@ -36,19 +35,17 @@ class Agent:
     session: Session
     tools: list[dict[str, Any]]
     max_turns: int
-    hooks_manager: HooksManager | None
+    run_hooks: bool
     yolo_mode: bool
 
     @classmethod
-    def main(
-        cls, session: Session, hooks_manager: HooksManager | None = None, yolo_mode: bool = False
-    ) -> Agent:
+    def main(cls, session: Session, yolo_mode: bool = False) -> Agent:
         """Create the main (interactive) agent.
 
         The main agent:
         - reuses the provided :class:`~meto.agent.session.Session` across prompts
         - has access to all tools
-        - can run hooks (if a hooks manager is provided)
+        - runs hooks (configured globally via the hooks file)
         """
         # The main agent uses the default system prompt and has access to all tools.
         # `prompt` is reserved for future per-agent system prompt customization.
@@ -58,7 +55,7 @@ class Agent:
             session=session,
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
-            hooks_manager=hooks_manager,
+            run_hooks=True,
             yolo_mode=yolo_mode,
         )
 
@@ -83,7 +80,7 @@ class Agent:
                 session=Session(session_logger_cls=NullSessionLogger),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
-                hooks_manager=None,  # Subagents don't run hooks
+                run_hooks=False,
                 yolo_mode=yolo_mode,
             )
         else:
@@ -104,7 +101,7 @@ class Agent:
             session=Session(session_logger_cls=NullSessionLogger),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
-            hooks_manager=None,  # Forked agents don't run hooks
+            run_hooks=False,
             yolo_mode=yolo_mode,
         )
 
@@ -115,7 +112,7 @@ class Agent:
         session: Session,
         allowed_tools: list[str] | str,
         max_turns: int,
-        hooks_manager: HooksManager | None = None,
+        run_hooks: bool = False,
         yolo_mode: bool = False,
     ) -> None:
         """Create an Agent.
@@ -126,14 +123,14 @@ class Agent:
             session: Conversation session (history + todos).
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
-            hooks_manager: Optional hooks manager (main agent only).
+            run_hooks: If True, run lifecycle hooks for this agent.
             yolo_mode: If True, skip tool permission prompts.
         """
         self.name = name
         self.prompt = prompt
         self.session = session
         self.max_turns = max_turns
-        self.hooks_manager = hooks_manager
+        self.run_hooks = run_hooks
         self.yolo_mode = yolo_mode
 
         # Get base tools for agent

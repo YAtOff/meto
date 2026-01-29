@@ -10,6 +10,7 @@ Supports YAML frontmatter metadata with markdown body for prompts.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -300,10 +301,7 @@ class AgentLoader:
         self._all_agents_cache = None
 
 
-# Global agent loader instance (lazy initialization)
-_agent_loader: AgentLoader | None = None
-
-
+@lru_cache(maxsize=16)
 def _get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
     """Get or create the global agent loader instance.
 
@@ -313,10 +311,8 @@ def _get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
     Returns:
         AgentLoader instance
     """
-    global _agent_loader
-    if _agent_loader is None:
-        _agent_loader = AgentLoader(agents_dir if agents_dir else Path(settings.AGENTS_DIR))
-    return _agent_loader
+    resolved = agents_dir if agents_dir is not None else Path(settings.AGENTS_DIR)
+    return AgentLoader(resolved)
 
 
 def clear_agent_cache() -> None:
@@ -324,9 +320,8 @@ def clear_agent_cache() -> None:
 
     Useful for testing or when agent files change.
     """
-    global _agent_loader
-    if _agent_loader is not None:
-        _agent_loader.clear_cache()
+    # Reset the loader instance cache entirely.
+    _get_agent_loader.cache_clear()
 
 
 def get_all_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
