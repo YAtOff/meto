@@ -296,7 +296,7 @@ class AgentLoader:
 _agent_loader: AgentLoader | None = None
 
 
-def get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
+def _get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
     """Get or create the global agent loader instance.
 
     Args:
@@ -332,5 +332,5 @@ def get_all_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
     Returns:
         Dict mapping agent names to AgentConfig
     """
-    loader = get_agent_loader(agents_dir)
+    loader = _get_agent_loader(agents_dir)
     return loader.get_all_agents()

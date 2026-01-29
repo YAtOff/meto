@@ -21,6 +21,7 @@ from meto.agent.agent import Agent
 from meto.agent.permission_policy import PERMISSION_REQUIRED
 from meto.agent.session import Session
 from meto.agent.skill_loader import SkillLoader
+from meto.agent.todo import TodoManager
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -219,12 +220,12 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
-def _manage_todos(session: Session, items: list[dict[str, Any]]) -> str:
+def _manage_todos(todos: TodoManager, items: list[dict[str, Any]]) -> str:
     """Update the todo list for a session."""
 
     try:
-        result = session.todos.update(items)
-        session.todos.print_rich()
+        result = todos.update(items)
+        todos.print_rich()
         return result
     except Exception as e:
         return f"Error: {e}"
@@ -418,7 +419,7 @@ def run_tool(
                 tool_output = "Error: session required for manage_todos"
             else:
                 items = parameters.get("items", [])
-                tool_output = _manage_todos(session, cast(list[dict[str, Any]], items))
+                tool_output = _manage_todos(session.todos, cast(list[dict[str, Any]], items))
         elif tool_name == "run_task":
             description = cast(str, parameters.get("description", ""))
             prompt = cast(str, parameters.get("prompt", ""))

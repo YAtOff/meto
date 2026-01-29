@@ -258,7 +258,7 @@ def _execute_custom_command(
     )
 
 
-def cmd_clear(args: list[str], session: Session) -> None:
+def _cmd_clear(args: list[str], session: Session) -> None:
     """Clear conversation history and start new session if persisting."""
     del args
     session.clear()
@@ -288,7 +288,7 @@ def _get_custom_commands() -> dict[str, CustomCommandSpec]:
     return result
 
 
-def cmd_help(args: list[str], session: Session) -> None:
+def _cmd_help(args: list[str], session: Session) -> None:
     """Show help for available commands."""
     del args, session  # Unused
 
@@ -309,14 +309,14 @@ def cmd_help(args: list[str], session: Session) -> None:
             print(f"  {name:<15} - {desc}")
 
 
-def cmd_quit(args: list[str], session: Session) -> None:
+def _cmd_quit(args: list[str], session: Session) -> None:
     """Exit meto."""
     del args, session  # Unused
     print("Goodbye!")
     raise typer.Exit(code=0)
 
 
-def cmd_export(args: list[str], session: Session) -> None:
+def _cmd_export(args: list[str], session: Session) -> None:
     """Export conversation history to a file."""
     try:
         export_target, export_format, include_system = _parse_export_args(args)
@@ -333,14 +333,14 @@ def cmd_export(args: list[str], session: Session) -> None:
     )
 
 
-def cmd_compact(args: list[str], session: Session) -> None:
+def _cmd_compact(args: list[str], session: Session) -> None:
     """Summarize conversation history to reduce token count."""
     del args
     _compact_history(session.history)
     session.renew()
 
 
-def cmd_context(args: list[str], session: Session) -> None:
+def _cmd_context(args: list[str], session: Session) -> None:
     """Show a multi-line context summary."""
     if args:
         print("Usage: /context")
@@ -348,13 +348,13 @@ def cmd_context(args: list[str], session: Session) -> None:
     print(format_context_summary(session.history))
 
 
-def cmd_todos(args: list[str], session: Session) -> None:
+def _cmd_todos(args: list[str], session: Session) -> None:
     """Show current task list."""
     del args
     session.todos.print_rich()
 
 
-def cmd_agents(args: list[str], session: Session) -> None:
+def _cmd_agents(args: list[str], session: Session) -> None:
     """List all available agents."""
     del args, session
     agents = get_all_agents()
@@ -366,7 +366,7 @@ def cmd_agents(args: list[str], session: Session) -> None:
         print(f"               tools: {tools_str}")
 
 
-def cmd_plan(args: list[str], session: Session) -> None:
+def _cmd_plan(args: list[str], session: Session) -> None:
     """Enter plan mode for systematic exploration and planning."""
     del args
     if session.plan_mode:
@@ -377,7 +377,7 @@ def cmd_plan(args: list[str], session: Session) -> None:
     print("Exit with /done")
 
 
-def cmd_done(args: list[str], session: Session) -> None:
+def _cmd_done(args: list[str], session: Session) -> None:
     """Exit plan mode, clear context, and insert plan instruction."""
     del args
     if not session.plan_mode:
@@ -411,44 +411,44 @@ Use the Read tool to read the full plan file and implement the steps.""",
 
 COMMANDS: dict[str, SlashCommandSpec] = {
     "/agents": SlashCommandSpec(
-        handler=cmd_agents,
+        handler=_cmd_agents,
         description="List all available agents",
     ),
     "/clear": SlashCommandSpec(
-        handler=cmd_clear,
+        handler=_cmd_clear,
         description="Clear conversation history",
     ),
     "/compact": SlashCommandSpec(
-        handler=cmd_compact,
+        handler=_cmd_compact,
         description="Summarize conversation to reduce token count",
     ),
     "/context": SlashCommandSpec(
-        handler=cmd_context,
+        handler=_cmd_context,
         description="Show a summary of the current context",
     ),
     "/done": SlashCommandSpec(
-        handler=cmd_done,
+        handler=_cmd_done,
         description="Exit plan mode + clear context",
     ),
     "/export": SlashCommandSpec(
-        handler=cmd_export,
+        handler=_cmd_export,
         description="Export conversation to a file (multiple formats)",
         usage="/export [path] [--format json|pretty_json|markdown|text] [--full]",
     ),
     "/help": SlashCommandSpec(
-        handler=cmd_help,
+        handler=_cmd_help,
         description="Show this help",
     ),
     "/plan": SlashCommandSpec(
-        handler=cmd_plan,
+        handler=_cmd_plan,
         description="Enter plan mode",
     ),
     "/quit": SlashCommandSpec(
-        handler=cmd_quit,
+        handler=_cmd_quit,
         description="Exit meto",
     ),
     "/todos": SlashCommandSpec(
-        handler=cmd_todos,
+        handler=_cmd_todos,
         description="Show current task list",
     ),
 }

@@ -134,7 +134,3 @@ class TodoManager:
         console.print()
         console.print(f"({completed}/{total} completed) ", end="")
         console.print(f"[cyan]{completed * '█'}{(total - completed) * '░'}[/cyan] {pct}%")
-
-
-# Backwards-compatibility alias (typo). Prefer TodoManager.
-TodoManger = TodoManager

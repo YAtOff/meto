@@ -33,7 +33,7 @@ class SkillConfig(TypedDict):
     resources: list[str]
 
 
-def validate_skill_config(config: dict[str, Any]) -> list[str]:
+def _validate_skill_config(config: dict[str, Any]) -> list[str]:
     """Validate skill configuration.
 
     Args:
@@ -108,7 +108,7 @@ class SkillLoader:
 
                 # Validate
                 config = {"name": name, "description": description}
-                errors = validate_skill_config(config)
+                errors = _validate_skill_config(config)
                 if errors:
                     logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
                     continue
