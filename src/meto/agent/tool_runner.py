@@ -18,9 +18,9 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.shortcuts import confirm
 
 from meto.agent.agent import Agent
+from meto.agent.permission_policy import PERMISSION_REQUIRED
 from meto.agent.session import Session
 from meto.agent.skill_loader import SkillLoader
-from meto.agent.tool_schema import PERMISSION_REQUIRED
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -383,6 +383,9 @@ def run_tool(
                 detail = permission_config.prompt_detail(parameters)
                 if not _prompt_permission(tool_name, detail):
                     return f"({tool_name} cancelled by user)"
+        else:
+            if not _prompt_permission(tool_name, "(no details available)"):
+                return f"({tool_name} cancelled by user)"
 
     tool_output = ""
     try:
