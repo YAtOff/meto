@@ -14,6 +14,7 @@ from openai import OpenAI
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.log import ReasoningLogger
 from meto.agent.prompt import build_system_prompt
+from meto.agent.skill_loader import get_skill_loader
 from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
 from meto.conf import settings
 
@@ -169,12 +170,13 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                         continue
 
                 # Execute tool (logging happens inside the tool runner)
+                skill_loader = get_skill_loader() if fn_name == "load_skill" else None
                 tool_output = run_tool(
                     fn_name,
                     arguments,
                     reasoning_logger,
                     agent.session,
-                    agent.session.skill_loader,
+                    skill_loader,
                     agent.yolo_mode,
                 )
 

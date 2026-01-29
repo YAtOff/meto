@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from meto.agent.frontmatter_loader import parse_yaml_frontmatter
+from meto.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -204,3 +205,31 @@ class SkillLoader:
             True if skill exists, False otherwise
         """
         return skill_name in self._skills
+
+
+# Global skill loader instance (lazy initialization)
+_skill_loader: SkillLoader | None = None
+
+
+def get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
+    """Get or create the global skill loader instance.
+
+    Args:
+        skills_dir: Directory to scan for skills
+
+    Returns:
+        SkillLoader instance
+    """
+    global _skill_loader
+    if _skill_loader is None:
+        _skill_loader = SkillLoader(skills_dir if skills_dir else Path(settings.SKILLS_DIR))
+    return _skill_loader
+
+
+def clear_skill_cache() -> None:
+    """Clear the global skill loader cache.
+
+    Useful for testing or when skill files change.
+    """
+    global _skill_loader
+    _skill_loader = None

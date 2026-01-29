@@ -9,10 +9,7 @@ import threading
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, override
-
-if TYPE_CHECKING:
-    from meto.agent.skill_loader import SkillLoader
+from typing import Any, override
 
 from meto.agent.todo import TodoManager
 from meto.conf import settings
@@ -211,7 +208,6 @@ class Session:
     session_logger_cls: type[SessionLogger]
     session_logger: SessionLogger
     todos: TodoManager
-    skill_loader: SkillLoader | None
     plan_mode: bool
     plan_file: Path | None
 
@@ -219,10 +215,8 @@ class Session:
         self,
         sid: str | None = None,
         session_logger_cls: type[SessionLogger] | None = None,
-        skill_loader: SkillLoader | None = None,
     ) -> None:
         self.session_logger_cls = session_logger_cls or FileSessionLogger
-        self.skill_loader = skill_loader
         if sid:
             self.session_id = sid
             self.history = load_session(sid)

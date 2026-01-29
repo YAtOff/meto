@@ -6,6 +6,7 @@ from meto.agent.agent_registry import PLAN_MODE_PROMPTS, get_all_agents, get_too
 from meto.agent.exceptions import SubagentError
 from meto.agent.hooks import HooksManager
 from meto.agent.session import NullSessionLogger, Session
+from meto.agent.skill_loader import get_skill_loader
 from meto.agent.tool_schema import populate_skill_descriptions
 from meto.conf import settings
 
@@ -91,9 +92,9 @@ class Agent:
         # Get base tools for agent
         base_tools = get_tools_for_agent(allowed_tools)
 
-        # Populate skill descriptions if skill_loader is available
-        if session.skill_loader:
-            skills = session.skill_loader.get_skill_descriptions()
+        # Populate skill descriptions for the load_skill tool (if present).
+        if any(tool["function"]["name"] == "load_skill" for tool in base_tools):
+            skills = get_skill_loader().get_skill_descriptions()
             self.tools = populate_skill_descriptions(base_tools, skills)
         else:
             self.tools = base_tools

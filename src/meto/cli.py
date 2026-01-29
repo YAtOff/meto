@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -17,7 +16,6 @@ from meto.agent.commands import handle_slash_command
 from meto.agent.exceptions import AgentInterrupted
 from meto.agent.hooks import HooksManager, load_hooks_manager
 from meto.agent.session import Session, get_session_info, list_session_files
-from meto.agent.skill_loader import SkillLoader
 from meto.conf import settings
 
 app = typer.Typer(add_completion=False)
@@ -42,9 +40,7 @@ def interactive_loop(
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
     if session is None:
-        # Create skill loader
-        skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
-        session = Session(skill_loader=skill_loader)
+        session = Session()
 
     if hooks_manager is None:
         hooks_manager = load_hooks_manager()
@@ -127,13 +123,8 @@ def run(
         return
 
     # Create skill loader and hooks manager
-    skill_loader = SkillLoader(Path(settings.SKILLS_DIR))
     hooks_manager = load_hooks_manager()
-    session = (
-        Session(sid=session_id, skill_loader=skill_loader)
-        if session_id
-        else Session(skill_loader=skill_loader)
-    )
+    session = Session(sid=session_id) if session_id else Session()
 
     # Use settings.YOLO_MODE as fallback when --yolo not explicitly passed
     yolo_mode = yolo if yolo is not None else settings.YOLO_MODE
