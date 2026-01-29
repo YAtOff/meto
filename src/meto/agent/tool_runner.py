@@ -25,6 +25,8 @@ from urllib.request import Request, urlopen
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.shortcuts import confirm
+from rich.console import Console
+from rich.panel import Panel
 
 from meto.agent.agent import Agent
 from meto.agent.permission_policy import PERMISSION_REQUIRED
@@ -328,17 +330,52 @@ def _execute_task(
     yolo_mode: bool = False,
 ) -> str:
     """Execute task in isolated subagent via direct `run_agent_loop` call."""
-    _ = description  # Reserved for future progress display
 
     from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
 
+    console = Console()
+
+    # Build banner content
+    agent_line = f"[bold cyan]{agent_name}[/bold cyan]"
+    if description:
+        banner_content = f"{agent_line}\n[dim]{description}[/dim]"
+    else:
+        banner_content = agent_line
+
+    # Show start banner
+    console.print()
+    console.print(
+        Panel(
+            banner_content,
+            title="[dim]-> Starting subagent[/dim]",
+            border_style="magenta",
+            padding=(0, 1),
+        )
+    )
+
+    # Run subagent
     try:
         agent = Agent.subagent(agent_name, yolo_mode=yolo_mode)
         # Allow subagents that have access to `run_task` to spawn further subagents.
         output = "\n".join(run_agent_loop(prompt, agent))
-        return _truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
+        result = _truncate(
+            output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS
+        )
     except Exception as ex:
-        return f"(subagent error: {ex})"
+        result = f"(subagent error: {ex})"
+
+    # Show end banner
+    console.print(
+        Panel(
+            banner_content,
+            title="[dim]<- Subagent finished[/dim]",
+            border_style="magenta",
+            padding=(0, 1),
+        )
+    )
+    console.print()
+
+    return result
 
 
 def _ask_user_question(question: str) -> str:
