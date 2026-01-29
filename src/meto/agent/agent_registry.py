@@ -68,6 +68,14 @@ PLAN_MODE_PROMPTS: dict[str, str] = {
 
 
 def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]]:
+    """Resolve an agent tool allowlist into concrete tool schemas.
+
+    Args:
+        requested_tools: Either "*" (all tools) or a list of tool names.
+
+    Raises:
+        ToolNotFoundError: If a named tool is not defined in the tool schema.
+    """
     if requested_tools == "*":
         return TOOLS
     else:

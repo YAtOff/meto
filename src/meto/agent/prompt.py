@@ -1,3 +1,14 @@
+"""System prompt construction.
+
+The system prompt is built on every model call by combining:
+- a static base prompt (tooling rules and capabilities)
+- repository instructions from AGENTS.md
+- optional plan-mode instructions (when active in the session)
+
+We intentionally re-read AGENTS.md each time so edits take effect immediately
+without restarting the CLI.
+"""
+
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING

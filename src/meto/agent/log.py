@@ -1,3 +1,12 @@
+"""Reasoning/logging utilities.
+
+The agent uses two logging surfaces:
+- a JSONL trace file (machine-readable)
+- rich-colored stderr output (human-readable)
+
+This module keeps the logging concerns isolated from the agent loop/tool runner.
+"""
+
 import json
 import logging
 from datetime import UTC, datetime
@@ -13,6 +22,8 @@ logger.propagate = False
 
 
 class JSONFormatter(logging.Formatter):
+    """Format log records as a single-line JSON object."""
+
     @override
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
@@ -93,7 +104,7 @@ class ReasoningLogger:
         }
         self._logger.log(level, msg, extra=extra)
 
-    def log_user_input(self, prompt: str):
+    def log_user_input(self, prompt: str) -> None:
         """Log the incoming user prompt."""
         self._log(logging.INFO, f"User input: {prompt}")
         self.console.print(f"[bold cyan]→[/] {prompt}")
@@ -135,7 +146,7 @@ class ReasoningLogger:
         args_preview = json.dumps(arguments, ensure_ascii=False)[:100]
         self.console.print(f"[dim]🔧 {tool_name} {args_preview}...[/]")
 
-    def log_tool_execution(self, tool_name: str, result: str, error: bool = False):
+    def log_tool_execution(self, tool_name: str, result: str, error: bool = False) -> None:
         """Log tool execution results."""
         level = logging.ERROR if error else logging.INFO
         truncated = result[:200] + "..." if len(result) > 200 else result
@@ -151,7 +162,7 @@ class ReasoningLogger:
         self._log(logging.INFO, f"Skill loaded: {skill_name}")
         self.console.print(f"[dim]ℹ️  Skill loaded: {skill_name}[/]")
 
-    def log_loop_completion(self, reason: str):
+    def log_loop_completion(self, reason: str) -> None:
         """Log why the agent loop ended."""
         self._log(
             logging.INFO,

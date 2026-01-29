@@ -1,3 +1,14 @@
+"""Agent object used by the CLI and agent loop.
+
+An :class:`~meto.agent.agent.Agent` bundles:
+- a session (conversation history + todos)
+- an allowed tool set (OpenAI tool schemas)
+- optional lifecycle hooks
+- a max turn budget for the tool-calling loop
+
+Main agents are stateful (shared session); subagents are isolated (fresh session).
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,6 +23,14 @@ from meto.conf import settings
 
 
 class Agent:
+    """Runtime configuration for one agent execution context.
+
+    This is intentionally a lightweight container. Most behavior lives in:
+    - :func:`meto.agent.agent_loop.run_agent_loop` (LLM/tool loop)
+    - :func:`meto.agent.tool_runner.run_tool` (tool execution)
+    - :mod:`meto.agent.agent_registry` (agent definitions + tool selection)
+    """
+
     name: str
     prompt: str
     session: Session
@@ -24,6 +43,13 @@ class Agent:
     def main(
         cls, session: Session, hooks_manager: HooksManager | None = None, yolo_mode: bool = False
     ) -> Agent:
+        """Create the main (interactive) agent.
+
+        The main agent:
+        - reuses the provided :class:`~meto.agent.session.Session` across prompts
+        - has access to all tools
+        - can run hooks (if a hooks manager is provided)
+        """
         # The main agent uses the default system prompt and has access to all tools.
         # `prompt` is reserved for future per-agent system prompt customization.
         return cls(
@@ -38,6 +64,11 @@ class Agent:
 
     @classmethod
     def subagent(cls, name: str, plan_mode: bool = False, yolo_mode: bool = False) -> Agent:
+        """Create an isolated subagent.
+
+        Subagents run with a fresh session (no shared history) and a stricter
+        tool allowlist defined by the agent registry. They never run hooks.
+        """
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
         if agent_config:
@@ -62,6 +93,11 @@ class Agent:
 
     @classmethod
     def fork(cls, allowed_tools: list[str] | str, yolo_mode: bool = False) -> Agent:
+        """Create a generic subagent with an explicit tool allowlist.
+
+        This is used for custom commands that want to restrict tool access
+        without creating a full agent configuration.
+        """
         return cls(
             name="fork",
             prompt="",
@@ -82,6 +118,17 @@ class Agent:
         hooks_manager: HooksManager | None = None,
         yolo_mode: bool = False,
     ) -> None:
+        """Create an Agent.
+
+        Args:
+            name: Agent name (e.g. "main", "explore", "plan").
+            prompt: Optional extra per-agent system prompt content.
+            session: Conversation session (history + todos).
+            allowed_tools: "*" or a list of tool names.
+            max_turns: Max model/tool iterations per user prompt.
+            hooks_manager: Optional hooks manager (main agent only).
+            yolo_mode: If True, skip tool permission prompts.
+        """
         self.name = name
         self.prompt = prompt
         self.session = session
@@ -101,7 +148,9 @@ class Agent:
 
     @property
     def tool_names(self) -> list[str]:
+        """Return the list of tool names exposed to the model."""
         return [tool["function"]["name"] for tool in self.tools]
 
     def has_tool(self, tool_name: str) -> bool:
+        """Return True if this agent exposes the given tool name."""
         return tool_name in self.tool_names

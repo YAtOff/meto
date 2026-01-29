@@ -1,3 +1,12 @@
+"""Tool permission policy.
+
+This module defines when the interactive CLI should ask for user confirmation
+before executing a tool.
+
+The default posture is conservative for filesystem tools: if a target path is
+outside known meto directories, we require permission (fail closed).
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -8,6 +17,8 @@ from meto.conf import settings
 
 
 class PermissionCheck(ABC):
+    """Interface for deciding whether a tool call should prompt for permission."""
+
     @abstractmethod
     def is_required(self, args: dict[str, Any]) -> bool:
         """Return True if executing the tool with given args should require user permission."""
@@ -18,6 +29,8 @@ class PermissionCheck(ABC):
 
 
 class AlwaysRequirePermissionCheck(PermissionCheck):
+    """Policy that always prompts, using one argument as the displayed detail."""
+
     def __init__(self, detail_arg: str) -> None:
         self.detail_arg: str = detail_arg
 
@@ -31,6 +44,8 @@ class AlwaysRequirePermissionCheck(PermissionCheck):
 
 
 class NeverRequirePermissionCheck(PermissionCheck):
+    """Policy that never prompts."""
+
     @override
     def is_required(self, args: dict[str, Any]) -> bool:
         return False
@@ -41,8 +56,11 @@ class NeverRequirePermissionCheck(PermissionCheck):
 
 
 class ExternalPathPermissionCheck(PermissionCheck):
+    """Prompt when a path argument points outside known meto directories."""
+
     @property
     def allowed_dirs(self) -> list[Path]:
+        """Directories that are considered safe to operate in without prompting."""
         # Keep this list tight: file system tools should not silently operate on
         # paths outside known meto areas.
         return [

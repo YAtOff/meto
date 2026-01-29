@@ -22,6 +22,11 @@ app = typer.Typer(add_completion=False)
 
 
 def _strip_single_trailing_newline(text: str) -> str:
+    """Strip exactly one trailing newline sequence from stdin-style input.
+
+    This is useful for one-shot mode where stdin often ends with a newline
+    (e.g. `echo "..." | meto --one-shot`). We preserve all other whitespace.
+    """
     # When piping input (e.g. echo), stdin usually ends with a trailing newline.
     # Strip exactly one trailing newline sequence, but preserve all other
     # whitespace and internal newlines.

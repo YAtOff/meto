@@ -1,3 +1,15 @@
+"""Main model/tool-calling loop.
+
+This module owns the long-running loop that:
+1) builds model messages (system + conversation history)
+2) calls the LLM
+3) executes requested tools
+4) appends tool results back into history
+
+It intentionally keeps the OpenAI client wiring here (and lazy) to avoid
+heavier imports in other modules.
+"""
+
 # pyright: reportImportCycles=false
 
 from __future__ import annotations
@@ -26,6 +38,11 @@ logger = logging.getLogger("agent")
 
 @lru_cache(maxsize=1)
 def _get_client() -> OpenAI:
+    """Create (and cache) an OpenAI client configured for the LiteLLM proxy.
+
+    Raises:
+        RuntimeError: If the API key is not configured.
+    """
     # Keep client creation in this module (per design), but do it lazily so
     # importing `meto.agent.loop` stays import-light.
     if not settings.LLM_API_KEY:

@@ -1,24 +1,25 @@
+"""Custom exception types used across the agent runtime."""
+
+
 class AgentError(Exception):
-    pass
+    """Base class for meto agent errors."""
 
 
 class SubagentError(AgentError):
-    pass
+    """Raised when a subagent cannot be created or executed."""
 
 
 class MaxStepsExceededError(AgentError):
-    pass
+    """Raised when the agent loop exceeds its configured turn budget."""
 
 
 class ToolExecutionError(AgentError):
-    pass
+    """Raised when a tool fails to execute (tool runner layer)."""
 
 
 class ToolNotFoundError(AgentError):
-    pass
+    """Raised when an unknown tool name is requested."""
 
 
 class AgentInterrupted(AgentError):
     """Raised when the agent loop is interrupted by user (Ctrl-C)."""
-
-    pass

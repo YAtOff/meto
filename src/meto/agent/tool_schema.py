@@ -1,3 +1,12 @@
+"""Model-facing tool schemas.
+
+This module defines the JSON schemas exposed to the LLM via the OpenAI tools API.
+
+Architectural constraint:
+    Keep this module import-light. Tool *execution* lives in
+    :mod:`meto.agent.tool_runner`.
+"""
+
 from __future__ import annotations
 
 import copy

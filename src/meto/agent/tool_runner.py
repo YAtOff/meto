@@ -1,3 +1,12 @@
+"""Tool execution implementations.
+
+This module contains the runtime implementations for tools exposed to the model
+in :mod:`meto.agent.tool_schema`.
+
+Architectural constraint:
+    This module must not import the agent loop or CLI to avoid import cycles.
+"""
+
 # pyright: reportImportCycles=false
 
 from __future__ import annotations
@@ -31,6 +40,8 @@ from meto.conf import settings
 
 
 class ToolRunner(Protocol):
+    """Protocol for objects that can execute a named tool call."""
+
     def run_tool(
         self,
         tool_name: str,
@@ -374,6 +385,24 @@ def run_tool(
     skill_loader: SkillLoader | None = None,
     yolo_mode: bool = False,
 ) -> str:
+    """Dispatch and execute a single tool call.
+
+    This function is the single entrypoint used by the agent loop to execute
+    tools requested by the model.
+
+    Notes:
+        - Permission prompting is enforced here (unless *yolo_mode* is enabled).
+        - The return value is always a human-readable string that is appended to
+          the conversation history as a tool message.
+
+    Args:
+        tool_name: Name of the tool to execute.
+        parameters: JSON-like tool arguments.
+        logger: Optional reasoning logger for structured trace output.
+        session: Session object (required for tools that mutate session state).
+        skill_loader: Skill loader instance (required for load_skill).
+        yolo_mode: If True, skip interactive permission prompts.
+    """
     if logger:
         logger.log_tool_selection(tool_name, parameters)
 
