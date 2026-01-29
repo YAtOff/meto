@@ -44,20 +44,6 @@ def interactive_loop(
     prompt_session = PromptSession(editing_mode=EditingMode.EMACS)
 
     while True:
-        # Check if we should auto-start implementation (from /implement command)
-        if session.start_implementation:
-            session.start_implementation = False  # Reset flag
-
-            # Use the follow-up system message as the prompt
-            impl_prompt = "Please read the plan file and start implementing it."
-
-            try:
-                for output in run_agent_loop(impl_prompt, main_agent):
-                    print(output)
-            except AgentInterrupted:
-                print("\n[Agent interrupted]")
-            continue
-
         # Dynamic prompt based on active session mode
         current_prompt = (
             session.mode.prompt_prefix(prompt_text or ">>> ")

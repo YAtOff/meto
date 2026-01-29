@@ -40,7 +40,18 @@ from meto.agent.modes.plan import PlanMode
 from meto.agent.session import Session, generate_session_id
 from meto.conf import settings
 
-SlashCommandHandler = Callable[[list[str], Session], None]
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommandResult:
+    """Result of executing a built-in command that returns a prompt."""
+
+    prompt: str
+    context: str | None = None  # "fork" or None
+    agent: str | None = None  # subagent name if context=fork
+    allowed_tools: list[str] | None = None  # tool restrictions (None = all)
+
+
+SlashCommandHandler = Callable[[list[str], Session], CommandResult | None]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -415,12 +426,12 @@ def _cmd_done(args: list[str], session: Session) -> None:
         )
 
 
-def _cmd_implement(args: list[str], session: Session) -> None:
+def _cmd_implement(args: list[str], session: Session) -> CommandResult | None:
     """Exit plan mode, clear context, insert plan instruction, and prompt to start implementation."""
     del args
     if session.mode is None:
         print("Not in plan mode.")
-        return
+        return None
 
     exit_result = session.exit_mode()
 
@@ -449,13 +460,15 @@ def _cmd_implement(args: list[str], session: Session) -> None:
             console=console,
             default=True,
         ):
-            # Set flag to trigger implementation
-            session.start_implementation = True
+            # Return result to trigger implementation
+            return CommandResult(prompt="Please read the plan file and start implementing it.")
+        return None
     else:
         print(
             "History cleared. No plan file found"
             + (f" at: {exit_result.artifact_path}" if exit_result else ".")
         )
+        return None
 
 
 COMMANDS: dict[str, SlashCommandSpec] = {
@@ -510,7 +523,7 @@ COMMANDS: dict[str, SlashCommandSpec] = {
 def handle_slash_command(
     user_input: str,
     session: Session,
-) -> tuple[bool, CustomCommandResult | None]:
+) -> tuple[bool, CommandResult | CustomCommandResult | None]:
     """Handle slash commands.
 
     Args:
@@ -520,8 +533,8 @@ def handle_slash_command(
     Returns:
         Tuple of (was_handled, result):
         - was_handled: True if command was processed (built-in or custom)
-        - result: If custom command executed, contains CustomCommandResult;
-          None for built-in commands or errors
+        - result: If command returns a prompt result, contains CommandResult or CustomCommandResult;
+          None for commands that don't return a result or errors
     """
     candidate = user_input.lstrip()
     if not candidate.startswith("/"):
@@ -546,8 +559,8 @@ def handle_slash_command(
     # Check built-in commands first
     spec = COMMANDS.get(command)
     if spec is not None:
-        spec.handler(args, session)
-        return True, None
+        result = spec.handler(args, session)
+        return True, result
 
     # Check for custom command file
     custom_command_path = _find_custom_command_file(command)

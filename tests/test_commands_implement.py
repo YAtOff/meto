@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from meto.agent.commands import handle_slash_command
+from meto.agent.commands import CommandResult, handle_slash_command
 from meto.agent.session import NullSessionLogger, Session
 from meto.conf import settings
 
 
-def test_implement_requires_plan_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_implement_requires_plan_mode() -> None:
     """Test that /implement only works when in plan mode."""
     session = Session(session_logger_cls=NullSessionLogger)
 
@@ -24,9 +24,6 @@ def test_implement_requires_plan_mode(tmp_path: Path, monkeypatch: pytest.Monkey
     assert was_handled is True
     assert result is None
     assert session.mode is None
-
-    # Verify the flag was not set
-    assert session.start_implementation is False
 
 
 def test_implement_clears_history_and_injects_message(
@@ -64,14 +61,11 @@ def test_implement_clears_history_and_injects_message(
     assert str(plan_file) in msg["content"]
     assert "FOLLOW THE PLAN" in msg["content"]
 
-    # Verify flag was NOT set (user declined)
-    assert session.start_implementation is False
-
 
 def test_implement_sets_flag_on_confirmation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test that /implement sets start_implementation flag when user confirms."""
+    """Test that /implement returns CommandResult when user confirms."""
     monkeypatch.setattr(settings, "PLAN_DIR", tmp_path / "plans")
 
     session = Session(session_logger_cls=NullSessionLogger)
@@ -91,7 +85,8 @@ def test_implement_sets_flag_on_confirmation(
     with patch("rich.prompt.Confirm.ask", return_value=True):
         was_handled, result = handle_slash_command("/implement", session)
         assert was_handled is True
-        assert result is None
+        assert isinstance(result, CommandResult)
+        assert result.prompt == "Please read the plan file and start implementing it."
 
     # Verify mode was exited
     assert session.mode is None
@@ -102,9 +97,6 @@ def test_implement_sets_flag_on_confirmation(
     assert msg["role"] == "system"
     assert str(plan_file) in msg["content"]
     assert "FOLLOW THE PLAN" in msg["content"]
-
-    # Verify flag WAS set (user confirmed)
-    assert session.start_implementation is True
 
 
 def test_implement_without_plan_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,8 +124,8 @@ def test_implement_without_plan_file(tmp_path: Path, monkeypatch: pytest.MonkeyP
     # Verify history was cleared (no message injected since no plan file)
     assert len(session.history) == 0
 
-    # Verify flag was NOT set (no plan file)
-    assert session.start_implementation is False
+    # Verify result was None (no plan file)
+    assert result is None
 
     # Confirm.ask should not have been called
     mock_confirm.assert_not_called()
