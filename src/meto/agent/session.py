@@ -54,44 +54,32 @@ class SessionLogger(ABC):
 class NullSessionLogger(SessionLogger):
     """No-op session logger."""
 
-    session_id: str
-
     def __init__(self, session_id: str) -> None:
         super().__init__(session_id)
-        self.session_id = session_id
 
     @override
     def log_user(self, content: str) -> None:
-        del content
         pass
 
     @override
     def log_assistant(self, content: str | None, tool_calls: list[Any] | None) -> None:
-        del content
-        del tool_calls
         pass
 
     @override
     def log_tool(self, tool_call_id: str, content: str) -> None:
-        del tool_call_id
-        del content
         pass
 
 
 class FileSessionLogger(SessionLogger):
     """Append-only JSONL logger for chat history persistence."""
 
-    session_id: str
-    session_file: Path
-    _lock: threading.Lock
-
     def __init__(
         self, session_id: str | None = None, session_dir: Path = settings.SESSION_DIR
     ) -> None:
-        self.session_id = session_id or generate_session_id()
+        self.session_id: str = session_id or generate_session_id()
         super().__init__(self.session_id)
-        self.session_file = session_dir / f"session-{self.session_id}.jsonl"
-        self._lock = threading.Lock()
+        self.session_file: Path = session_dir / f"session-{self.session_id}.jsonl"
+        self._lock: threading.Lock = threading.Lock()
 
         # Ensure parent directory exists
         self.session_file.parent.mkdir(parents=True, exist_ok=True)
@@ -171,11 +159,10 @@ def load_session(session_id: str, session_dir: Path = settings.SESSION_DIR) -> l
 
 def list_session_files(session_dir: Path = settings.SESSION_DIR) -> list[Path]:
     """Return list of session-*.jsonl files, sorted by mtime (newest first)."""
-    pattern = "session-*.jsonl"
     if not session_dir.exists():
         return []
     return sorted(
-        session_dir.glob(pattern),
+        session_dir.glob("session-*.jsonl"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

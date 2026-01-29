@@ -43,8 +43,6 @@ def _get_client() -> OpenAI:
     Raises:
         RuntimeError: If the API key is not configured.
     """
-    # Keep client creation in this module (per design), but do it lazily so
-    # importing `meto.agent.loop` stays import-light.
     if not settings.LLM_API_KEY:
         raise RuntimeError(
             "METO_LLM_API_KEY is not set. Configure it in .env or environment variables."
@@ -55,8 +53,8 @@ def _get_client() -> OpenAI:
 def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
     """Run the agent loop for a single user prompt.
 
-    In interactive mode, this function is called repeatedly and shares module
-    state (`agent.session.history`) so the conversation continues.
+    In interactive mode, this function is called repeatedly and shares
+    module state (`agent.session.history`) so the conversation continues.
 
     Raises:
         AgentInterrupted: If the user interrupts with Ctrl-C during execution.
@@ -80,10 +78,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
         # Run session_start hooks (only for agents that opt into hooks)
         if hooks_manager:
-            hooks_manager.run_hooks(
-                "session_start",
-                session_id=agent.session.session_id,
-            )
+            hooks_manager.run_hooks("session_start", session_id=agent.session.session_id)
 
         reasoning_logger.log_user_input(prompt)
         agent.session.history.append({"role": "user", "content": prompt})
@@ -94,6 +89,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             if interrupted:
                 reasoning_logger.log_loop_completion("Interrupted by user (Ctrl-C)")
                 raise AgentInterrupted("Agent loop interrupted by user")
+
             # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
             # Our history is intentionally JSON-shaped, so treat these as dynamic.
             messages: Any = [
@@ -109,7 +105,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
             msg = resp.choices[0].message
             assistant_content = msg.content or ""
-            # `tool_calls` typing varies by model/SDK version; treat as dynamic.
             tool_calls: list[Any] = list(getattr(msg, "tool_calls", None) or [])
 
             # Log model reasoning and response
@@ -159,10 +154,9 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                         f"[{reasoning_logger.session_id}] Failed to parse arguments for {fn_name}: {e}"
                     )
 
-                if isinstance(arguments_any, dict):
-                    arguments = cast(dict[str, Any], arguments_any)
-                else:
-                    arguments = {}
+                arguments = (
+                    cast(dict[str, Any], arguments_any) if isinstance(arguments_any, dict) else {}
+                )
 
                 # Run pre_tool_use hooks
                 if hooks_manager:

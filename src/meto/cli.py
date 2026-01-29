@@ -23,12 +23,9 @@ app = typer.Typer(add_completion=False)
 def _strip_single_trailing_newline(text: str) -> str:
     """Strip exactly one trailing newline sequence from stdin-style input.
 
-    This is useful for one-shot mode where stdin often ends with a newline
-    (e.g. `echo "..." | meto --one-shot`). We preserve all other whitespace.
+    Useful for one-shot mode where stdin often ends with a newline
+    (e.g. `echo "..." | meto --one-shot`). Preserves all other whitespace.
     """
-    # When piping input (e.g. echo), stdin usually ends with a trailing newline.
-    # Strip exactly one trailing newline sequence, but preserve all other
-    # whitespace and internal newlines.
     if text.endswith("\r\n"):
         return text[:-2]
     if text.endswith("\n"):
@@ -42,37 +39,36 @@ def interactive_loop(
     yolo_mode: bool = False,
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
-    if session is None:
-        session = Session()
-
+    session = session or Session()
     main_agent = Agent.main(session, yolo_mode=yolo_mode)
+    prompt_session = PromptSession(editing_mode=EditingMode.EMACS)
 
-    prompt_session: PromptSession[str] = PromptSession(editing_mode=EditingMode.EMACS)
     while True:
-        # Dynamic prompt based on active session mode.
-        default_prompt = prompt_text or ">>> "
+        # Dynamic prompt based on active session mode
         current_prompt = (
-            session.mode.prompt_prefix(default_prompt) if session.mode else default_prompt
+            session.mode.prompt_prefix(prompt_text or ">>> ")
+            if session.mode
+            else prompt_text or ">>> "
         )
+
         try:
-            user_input: str = prompt_session.prompt(current_prompt)
+            user_input = prompt_session.prompt(current_prompt)
         except (EOFError, KeyboardInterrupt):
-            # Exit cleanly on Ctrl+Z/Ctrl+D (EOF) or Ctrl+C.
             return
 
         # Handle slash commands
         was_handled, cmd_result = handle_slash_command(user_input, session)
 
         if was_handled:
-            # If custom command provided a result, run agent loop with it
             if cmd_result:
                 try:
                     # Choose agent based on context
                     if cmd_result.context == "fork":
-                        if cmd_result.agent:
-                            agent = Agent.subagent(cmd_result.agent, yolo_mode=yolo_mode)
-                        else:
-                            agent = Agent.fork(cmd_result.allowed_tools or "*", yolo_mode=yolo_mode)
+                        agent = (
+                            Agent.subagent(cmd_result.agent, yolo_mode=yolo_mode)
+                            if cmd_result.agent
+                            else Agent.fork(cmd_result.allowed_tools or "*", yolo_mode=yolo_mode)
+                        )
                     else:
                         agent = main_agent
 
@@ -80,7 +76,6 @@ def interactive_loop(
                         print(output)
                 except AgentInterrupted:
                     print("\n[Agent interrupted]")
-            # Otherwise, built-in command was executed, continue to next iteration
             continue
 
         # No slash command, run agent loop with user input
@@ -118,16 +113,10 @@ def run(
 ) -> None:
     """Run meto."""
 
-    # Typer (Click) always invokes the callback, even when a subcommand is
-    # provided. `invoke_without_command=True` only controls whether the callback
-    # runs when *no* subcommand is given. Guard here to avoid accidentally
-    # starting interactive mode when the user is running a subcommand.
     if ctx.invoked_subcommand is not None:
         return
 
     session = Session(sid=session_id) if session_id else Session()
-
-    # Use settings.YOLO_MODE as fallback when --yolo not explicitly passed
     yolo_mode = yolo if yolo is not None else settings.YOLO_MODE
 
     if one_shot:
@@ -138,7 +127,7 @@ def run(
                 print(output)
         except AgentInterrupted:
             print("\n[Agent interrupted]", file=sys.stderr)
-            raise typer.Exit(code=130) from None  # Standard exit code for SIGINT
+            raise typer.Exit(code=130) from None
         raise typer.Exit(code=0)
 
     interactive_loop(session=session, yolo_mode=yolo_mode)

@@ -73,14 +73,15 @@ def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]
     """
     if requested_tools == "*":
         return TOOLS
-    else:
-        tools_by_name = TOOLS_BY_NAME
-        unknown = [name for name in requested_tools if name not in tools_by_name]
-        if unknown:
-            known = ", ".join(sorted(tools_by_name))
-            missing = ", ".join(unknown)
-            raise ToolNotFoundError(f"Unknown tool(s): {missing}. Known tools: {known}")
-        return [tools_by_name[name] for name in requested_tools]
+
+    tools_by_name = TOOLS_BY_NAME
+    unknown = [name for name in requested_tools if name not in tools_by_name]
+    if unknown:
+        known = ", ".join(sorted(tools_by_name))
+        missing = ", ".join(unknown)
+        raise ToolNotFoundError(f"Unknown tool(s): {missing}. Known tools: {known}")
+
+    return [tools_by_name[name] for name in requested_tools]
 
 
 def validate_agent_config(config: dict[str, Any]) -> list[str]:

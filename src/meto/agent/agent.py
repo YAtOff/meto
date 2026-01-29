@@ -1,6 +1,6 @@
 """Agent object used by the CLI and agent loop.
 
-An :class:`~meto.agent.agent.Agent` bundles:
+An Agent bundles:
 - a session (conversation history + todos)
 - an allowed tool set (OpenAI tool schemas)
 - optional lifecycle hooks
@@ -43,12 +43,10 @@ class Agent:
         """Create the main (interactive) agent.
 
         The main agent:
-        - reuses the provided :class:`~meto.agent.session.Session` across prompts
+        - reuses the provided Session across prompts
         - has access to all tools
         - runs hooks (configured globally via the hooks file)
         """
-        # The main agent uses the default system prompt and has access to all tools.
-        # `prompt` is reserved for future per-agent system prompt customization.
         return cls(
             name="main",
             prompt="",
@@ -68,8 +66,8 @@ class Agent:
         """
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
+
         if agent_config:
-            # Use plan mode prompt if available and in plan mode
             prompt = agent_config["prompt"]
             allowed_tools = agent_config.get("tools", [])
             return cls(
@@ -81,16 +79,15 @@ class Agent:
                 run_hooks=False,
                 yolo_mode=yolo_mode,
             )
-        else:
-            # Build helpful error message with available agents
-            available = ", ".join(sorted(all_agents.keys()))
-            raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
+
+        available = ", ".join(sorted(all_agents.keys()))
+        raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     @classmethod
     def fork(cls, allowed_tools: list[str] | str, yolo_mode: bool = False) -> Agent:
         """Create a generic subagent with an explicit tool allowlist.
 
-        This is used for custom commands that want to restrict tool access
+        Used for custom commands that want to restrict tool access
         without creating a full agent configuration.
         """
         return cls(
@@ -131,10 +128,9 @@ class Agent:
         self.run_hooks = run_hooks
         self.yolo_mode = yolo_mode
 
-        # Get base tools for agent
         base_tools = get_tools_for_agent(allowed_tools)
 
-        # Populate skill descriptions for the load_skill tool (if present).
+        # Populate skill descriptions for the load_skill tool (if present)
         if any(tool["function"]["name"] == "load_skill" for tool in base_tools):
             skills = get_skill_loader().get_skill_descriptions()
             self.tools = populate_skill_descriptions(base_tools, skills)

@@ -9,7 +9,7 @@ SRC_PATHS = ["src", "tests", "devtools", "scripts"]
 DOC_PATHS = ["README.md"]
 
 
-reconfigure(emoji=not get_console().options.legacy_windows)  # No emojis on legacy windows.
+reconfigure(emoji=not get_console().options.legacy_windows)
 
 
 def main():

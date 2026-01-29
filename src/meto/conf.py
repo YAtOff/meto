@@ -42,22 +42,22 @@ class Settings(BaseSettings):
 
     MAIN_AGENT_MAX_TURNS: int = Field(
         default=100,
-        description="Maximum number of model/tool iterations for the main agent per prompt.",
+        description="Maximum iterations for main agent per prompt.",
     )
 
     SUBAGENT_MAX_TURNS: int = Field(
         default=25,
-        description="Maximum number of model/tool iterations for subagents per task.",
+        description="Maximum iterations for subagents per task.",
     )
 
     TOOL_TIMEOUT_SECONDS: int = Field(
         default=300,
-        description="Timeout (seconds) for a single shell tool command execution.",
+        description="Timeout (seconds) for shell tool execution.",
     )
 
     MAX_TOOL_OUTPUT_CHARS: int = Field(
         default=50000,
-        description="Maximum number of characters captured from a tool result.",
+        description="Maximum characters captured from tool result.",
     )
 
     # --- Directories ---
@@ -80,17 +80,17 @@ class Settings(BaseSettings):
 
     AGENTS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "agents",
-        description="Directory to scan for user-defined agent files.",
+        description="Directory for user-defined agent files.",
     )
 
     COMMANDS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "commands",
-        description="Directory to scan for user-defined command files.",
+        description="Directory for user-defined command files.",
     )
 
     SKILLS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "skills",
-        description="Directory to scan for skill directories.",
+        description="Directory for skill directories.",
     )
 
     HOOKS_FILE: Path = Field(
@@ -110,8 +110,7 @@ class Settings(BaseSettings):
         """Generate actual log file path with timestamp and random suffix."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
-        filename = f"agent_reasoning_{timestamp}_{random_suffix}.jsonl"
-        return self.LOG_DIR / filename
+        return self.LOG_DIR / f"agent_reasoning_{timestamp}_{random_suffix}.jsonl"
 
     @field_validator("LOG_DIR")
     @classmethod
