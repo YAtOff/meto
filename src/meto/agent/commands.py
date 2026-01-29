@@ -415,6 +415,49 @@ def _cmd_done(args: list[str], session: Session) -> None:
         )
 
 
+def _cmd_implement(args: list[str], session: Session) -> None:
+    """Exit plan mode, clear context, insert plan instruction, and prompt to start implementation."""
+    del args
+    if session.mode is None:
+        print("Not in plan mode.")
+        return
+
+    exit_result = session.exit_mode()
+
+    # Clear history completely
+    session.history.clear()
+    session.session_id = generate_session_id()
+    session.session_logger = session.session_logger_cls(session.session_id)
+
+    # Insert follow-up instruction if provided by the mode.
+    if exit_result and exit_result.followup_system_message:
+        session.history.append(
+            {
+                "role": "system",
+                "content": exit_result.followup_system_message,
+            }
+        )
+        print(f"History cleared. Follow the plan in: {exit_result.artifact_path}")
+
+        # Prompt user to start implementation
+        from rich.console import Console
+        from rich.prompt import Confirm
+
+        console = Console()
+        if Confirm.ask(
+            "\nStart implementing the plan now?",
+            console=console,
+            default=True,
+        ):
+            # Set flag to trigger implementation
+            session.start_implementation = True
+    else:
+        print(
+            "History cleared. No plan file found"
+            + (f" at: {exit_result.artifact_path}" if exit_result else ".")
+        )
+
+
 COMMANDS: dict[str, SlashCommandSpec] = {
     "/agents": SlashCommandSpec(
         handler=_cmd_agents,
@@ -444,6 +487,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     "/help": SlashCommandSpec(
         handler=_cmd_help,
         description="Show this help",
+    ),
+    "/implement": SlashCommandSpec(
+        handler=_cmd_implement,
+        description="Exit plan mode + prompt to start implementation",
     ),
     "/plan": SlashCommandSpec(
         handler=_cmd_plan,

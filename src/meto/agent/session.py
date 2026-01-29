@@ -198,6 +198,7 @@ class Session:
     todos: TodoManager
     mode: SessionMode | None
     last_mode_exit: ModeExitResult | None
+    start_implementation: bool  # Flag to trigger implementation after command
 
     def __init__(
         self,
@@ -216,6 +217,7 @@ class Session:
         self.todos = TodoManager()
         self.mode = None
         self.last_mode_exit = None
+        self.start_implementation = False
 
     def enter_mode(self, mode: SessionMode) -> None:
         """Enter a session mode.
@@ -251,6 +253,7 @@ class Session:
         self.session_logger = self.session_logger_cls(self.session_id)
         self.mode = None
         self.last_mode_exit = None
+        self.start_implementation = False
 
     def renew(self) -> None:
         """Generate new session ID with current history preserved."""
@@ -259,6 +262,7 @@ class Session:
         self.todos = TodoManager()
         self.mode = None
         self.last_mode_exit = None
+        self.start_implementation = False
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])
