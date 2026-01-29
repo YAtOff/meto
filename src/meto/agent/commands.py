@@ -36,6 +36,7 @@ from openai import OpenAI
 from meto.agent.agent_registry import get_all_agents
 from meto.agent.context import format_context_summary, save_agent_context
 from meto.agent.frontmatter_loader import parse_yaml_frontmatter
+from meto.agent.modes.plan import PlanMode
 from meto.agent.session import Session, generate_session_id
 from meto.conf import settings
 
@@ -369,10 +370,17 @@ def _cmd_agents(args: list[str], session: Session) -> None:
 def _cmd_plan(args: list[str], session: Session) -> None:
     """Enter plan mode for systematic exploration and planning."""
     del args
-    if session.plan_mode:
-        print("Already in plan mode. Exit with /done")
+    if session.mode is not None:
+        # Keep message backwards-compatible for the common case.
+        if isinstance(session.mode, PlanMode):
+            print("Already in plan mode. Exit with /done")
+        else:
+            print(f"Already in {session.mode.name} mode. Exit with /done")
         return
-    plan_file = session.enter_plan_mode()
+
+    mode = PlanMode()
+    session.enter_mode(mode)
+    plan_file = mode.plan_file
     print(f"Plan mode entered. Save your plan to: {plan_file}")
     print("Exit with /done")
 
@@ -380,33 +388,31 @@ def _cmd_plan(args: list[str], session: Session) -> None:
 def _cmd_done(args: list[str], session: Session) -> None:
     """Exit plan mode, clear context, and insert plan instruction."""
     del args
-    if not session.plan_mode:
+    if session.mode is None:
         print("Not in plan mode.")
         return
 
-    plan_file, plan_content = session.exit_plan_mode()
-    session.plan_mode = False
+    exit_result = session.exit_mode()
 
     # Clear history completely
     session.history.clear()
     session.session_id = generate_session_id()
     session.session_logger = session.session_logger_cls(session.session_id)
 
-    # Insert plan instruction if plan file exists
-    if plan_file and plan_content:
+    # Insert follow-up instruction if provided by the mode.
+    if exit_result and exit_result.followup_system_message:
         session.history.append(
             {
                 "role": "system",
-                "content": f"""FOLLOW THE PLAN stored in: {plan_file}
-
-Read the plan file and follow the implementation steps defined in it.
-
-Use the Read tool to read the full plan file and implement the steps.""",
+                "content": exit_result.followup_system_message,
             }
         )
-        print(f"History cleared. Follow the plan in: {plan_file}")
+        print(f"History cleared. Follow the plan in: {exit_result.artifact_path}")
     else:
-        print(f"History cleared. No plan file found at: {plan_file}")
+        print(
+            "History cleared. No plan file found"
+            + (f" at: {exit_result.artifact_path}" if exit_result else ".")
+        )
 
 
 COMMANDS: dict[str, SlashCommandSpec] = {

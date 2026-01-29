@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, override
 
+from meto.agent.modes.base import ModeExitResult, SessionMode
 from meto.agent.todo import TodoManager
 from meto.conf import settings
 
@@ -208,8 +209,8 @@ class Session:
     session_logger_cls: type[SessionLogger]
     session_logger: SessionLogger
     todos: TodoManager
-    plan_mode: bool
-    plan_file: Path | None
+    mode: SessionMode | None
+    last_mode_exit: ModeExitResult | None
 
     def __init__(
         self,
@@ -226,8 +227,34 @@ class Session:
             self.history = []
             self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
-        self.plan_mode = False
-        self.plan_file = None
+        self.mode = None
+        self.last_mode_exit = None
+
+    def enter_mode(self, mode: SessionMode) -> None:
+        """Enter a session mode.
+
+        Args:
+            mode: Mode instance to enter.
+
+        Raises:
+            RuntimeError: If a mode is already active.
+        """
+
+        if self.mode is not None:
+            raise RuntimeError(f"Session already in mode: {self.mode.name}")
+        mode.enter(self)
+        self.mode = mode
+
+    def exit_mode(self) -> ModeExitResult | None:
+        """Exit the current session mode, if any."""
+
+        if self.mode is None:
+            return None
+
+        result = self.mode.exit(self)
+        self.last_mode_exit = result
+        self.mode = None
+        return result
 
     def clear(self) -> None:
         """Clear history and todos, start new session with new ID."""
@@ -235,16 +262,16 @@ class Session:
         self.todos.clear()
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
-        self.plan_mode = False
-        self.plan_file = None
+        self.mode = None
+        self.last_mode_exit = None
 
     def renew(self) -> None:
         """Generate new session ID with current history preserved."""
         self.session_id = generate_session_id()
         self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
-        self.plan_mode = False
-        self.plan_file = None
+        self.mode = None
+        self.last_mode_exit = None
         for msg in self.history:
             if msg["role"] == "user":
                 self.session_logger.log_user(msg["content"])
@@ -252,54 +279,3 @@ class Session:
                 self.session_logger.log_assistant(msg["content"], msg.get("tool_calls"))
             elif msg["role"] == "tool":
                 self.session_logger.log_tool(msg["tool_call_id"], msg["content"])
-
-    def enter_plan_mode(self) -> Path:
-        """Enter plan mode for systematic exploration and planning.
-
-        Returns:
-            Path to the plan file where the plan should be saved
-        """
-        self.plan_mode = True
-        # Generate unique plan file path
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
-        plan_filename = f"plan-{timestamp}-{random_suffix}.md"
-        self.plan_file = settings.PLAN_DIR / plan_filename
-        return self.plan_file
-
-    def exit_plan_mode(self) -> tuple[Path | None, str | None]:
-        """Exit plan mode and return plan file info.
-
-        Returns:
-            Tuple of (plan_file_path, plan_content)
-        """
-        self.plan_mode = False
-        plan_file = self.plan_file
-        plan_content = None
-
-        # Read plan file if it exists
-        if plan_file and plan_file.exists():
-            try:
-                plan_content = plan_file.read_text(encoding="utf-8")
-            except OSError:
-                plan_content = None
-
-        # Don't clear plan_file yet - caller needs it
-        return plan_file, plan_content
-
-    def extract_plan_history(self) -> list[dict[str, Any]]:
-        """Extract plan mode conversation from history.
-
-        Returns messages from /plan command to current point.
-        """
-        # Find where plan mode started
-        plan_start_idx = -1
-        for i, msg in enumerate(self.history):
-            if msg["role"] == "user" and "/plan" in msg.get("content", ""):
-                plan_start_idx = i
-                break
-
-        if plan_start_idx == -1:
-            return []
-
-        return self.history[plan_start_idx:].copy()

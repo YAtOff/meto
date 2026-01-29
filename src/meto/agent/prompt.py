@@ -61,29 +61,11 @@ def build_system_prompt(session: "Session | None" = None) -> str:
     cwd = os.getcwd()
     prompt = SYSTEM_PROMPT.format(cwd=cwd)
 
-    # Add plan mode context if active
-    if session and session.plan_mode:
-        plan_file = session.plan_file or "PLAN_FILE_NOT_SET"
-        prompt += f"""
-
------ PLAN MODE ACTIVE -----
-You are in PLAN MODE. Your goal is to create a plan and save it to a file.
-
-PLAN FILE: {plan_file}
-
-CRITICAL: You MUST save your final plan to this file using the Write tool.
-
-Workflow:
-1. Use explore/plan agents to understand the codebase
-2. Design implementation with numbered steps
-3. Write the plan to: {plan_file}
-4. Use /done to exit plan mode
-
-- Use run_task tool with explore/plan agents for systematic planning
-- Do NOT make file modifications during planning (except the plan file)
-- At the end of each plan, give me a list of unresolved questions to answer, if any.
-- Your final action MUST be writing the plan to {plan_file}
------ END PLAN MODE -----"""
+    # Allow session modes to augment the prompt.
+    if session and session.mode is not None:
+        fragment = session.mode.system_prompt_fragment()
+        if fragment:
+            prompt += fragment
 
     agents_path = Path(cwd) / "AGENTS.md"
     begin = "----- BEGIN AGENTS.md (project instructions) -----"
