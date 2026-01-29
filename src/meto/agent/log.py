@@ -136,6 +136,11 @@ class ReasoningLogger:
                 f"Token usage - Input: {response.usage.prompt_tokens}, "
                 f"Output: {response.usage.completion_tokens}",
             )
+            # Also print to console for user visibility
+            self.console.print(
+                f"[dim]📊 Tokens: {response.usage.prompt_tokens} sent, "
+                f"{response.usage.completion_tokens} received[/]"
+            )
 
     def log_tool_selection(self, tool_name: str, arguments: dict[str, Any]) -> None:
         """Log when the model selects a tool."""
