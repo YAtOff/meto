@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from meto.agent.agent_registry import PLAN_MODE_PROMPTS, get_all_agents, get_tools_for_agent
+from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
 from meto.agent.session import NullSessionLogger, Session
 from meto.agent.skill_loader import get_skill_loader
@@ -60,7 +60,7 @@ class Agent:
         )
 
     @classmethod
-    def subagent(cls, name: str, plan_mode: bool = False, yolo_mode: bool = False) -> Agent:
+    def subagent(cls, name: str, yolo_mode: bool = False) -> Agent:
         """Create an isolated subagent.
 
         Subagents run with a fresh session (no shared history) and a stricter
@@ -71,8 +71,6 @@ class Agent:
         if agent_config:
             # Use plan mode prompt if available and in plan mode
             prompt = agent_config["prompt"]
-            if plan_mode and name in PLAN_MODE_PROMPTS:
-                prompt = PLAN_MODE_PROMPTS[name]
             allowed_tools = agent_config.get("tools", [])
             return cls(
                 name=name,

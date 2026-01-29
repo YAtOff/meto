@@ -29,7 +29,7 @@ from prompt_toolkit.shortcuts import confirm
 from meto.agent.agent import Agent
 from meto.agent.permission_policy import PERMISSION_REQUIRED
 from meto.agent.session import Session
-from meto.agent.skill_loader import SkillLoader
+from meto.agent.skill_loader import get_skill_loader
 from meto.agent.todo import TodoManager
 from meto.conf import settings
 
@@ -325,7 +325,6 @@ def _execute_task(
     prompt: str,
     agent_name: str,
     description: str | None = None,
-    plan_mode: bool = False,
     yolo_mode: bool = False,
 ) -> str:
     """Execute task in isolated subagent via direct `run_agent_loop` call."""
@@ -334,7 +333,7 @@ def _execute_task(
     from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
 
     try:
-        agent = Agent.subagent(agent_name, plan_mode=plan_mode, yolo_mode=yolo_mode)
+        agent = Agent.subagent(agent_name, yolo_mode=yolo_mode)
         # Allow subagents that have access to `run_task` to spawn further subagents.
         output = "\n".join(run_agent_loop(prompt, agent))
         return _truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
@@ -365,9 +364,10 @@ def _prompt_permission(tool_name: str, detail: str) -> bool:
         return False
 
 
-def _load_skill(skill_name: str, skill_loader: SkillLoader) -> str:
+def _load_skill(skill_name: str) -> str:
     """Load skill content and return wrapped in XML tags."""
     try:
+        skill_loader = get_skill_loader()
         content = skill_loader.get_skill_content(skill_name)
         # Wrap in XML for clear boundaries
         return f'<skill-loaded name="{skill_name}">\n{content}\n</skill-loaded>'
@@ -382,7 +382,6 @@ def run_tool(
     parameters: dict[str, Any],
     logger: Any | None = None,
     session: Session | None = None,
-    skill_loader: SkillLoader | None = None,
     yolo_mode: bool = False,
 ) -> str:
     """Dispatch and execute a single tool call.
@@ -400,7 +399,6 @@ def run_tool(
         parameters: JSON-like tool arguments.
         logger: Optional reasoning logger for structured trace output.
         session: Session object (required for tools that mutate session state).
-        skill_loader: Skill loader instance (required for load_skill).
         yolo_mode: If True, skip interactive permission prompts.
     """
     if logger:
@@ -453,19 +451,15 @@ def run_tool(
             description = cast(str, parameters.get("description", ""))
             prompt = cast(str, parameters.get("prompt", ""))
             agent_name = cast(str, parameters.get("agent_name", ""))
-            plan_mode = session.plan_mode if session else False
-            tool_output = _execute_task(prompt, agent_name, description, plan_mode, yolo_mode)
+            tool_output = _execute_task(prompt, agent_name, description, yolo_mode)
         elif tool_name == "ask_user_question":
             question = parameters.get("question", "")
             tool_output = _ask_user_question(question)
         elif tool_name == "load_skill":
-            if skill_loader is None:
-                tool_output = "Error: skill_loader not available"
-            else:
-                skill_name = parameters.get("skill_name", "")
-                tool_output = _load_skill(skill_name, skill_loader)
-                if logger:
-                    logger.log_skill_loaded(skill_name)
+            skill_name = parameters.get("skill_name", "")
+            tool_output = _load_skill(skill_name)
+            if logger:
+                logger.log_skill_loaded(skill_name)
 
         else:
             tool_output = f"Error: Unknown tool: {tool_name}"

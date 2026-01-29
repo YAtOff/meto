@@ -33,7 +33,14 @@ BUILTIN_AGENTS: dict[str, AgentConfig] = {
     "explore": {
         "description": "Read-only exploration - search, find files, analyze code",
         "tools": ["shell", "list_dir", "read_file", "grep_search", "fetch"],
-        "prompt": "You are an exploration agent. Search and analyze, but never modify files. Return concise summary.",
+        "prompt": """PLAN MODE exploration agent. Analyze codebase systematically for implementation planning:
+1. Identify all files requiring changes
+2. Map dependencies between components
+3. Note any technical constraints or risks
+4. Summarize findings for implementation planning
+
+- Do NOT make changes
+- Return structured analysis""",
     },
     "code": {
         "description": "Full agent for implementing features and fixing bugs",
@@ -43,21 +50,7 @@ BUILTIN_AGENTS: dict[str, AgentConfig] = {
     "plan": {
         "description": "Planning agent - design without modifying",
         "tools": ["shell", "list_dir", "read_file", "grep_search", "fetch"],
-        "prompt": "You are a planning agent. Analyze codebase, output numbered implementation plan. Do NOT make changes.",
-    },
-}
-
-# Enhanced prompts for plan mode
-PLAN_MODE_PROMPTS: dict[str, str] = {
-    "explore": """PLAN MODE exploration agent. Analyze codebase systematically for implementation planning:
-1. Identify all files requiring changes
-2. Map dependencies between components
-3. Note any technical constraints or risks
-4. Summarize findings for implementation planning
-
-- Do NOT make changes
-- Return structured analysis""",
-    "plan": """PLAN MODE planning agent. Create comprehensive implementation plan:
+        "prompt": """PLAN MODE planning agent. Create comprehensive implementation plan:
 1. Break down feature into numbered implementation steps
 2. Identify required resources and dependencies
 3. Note potential implementation challenges
@@ -65,6 +58,7 @@ PLAN_MODE_PROMPTS: dict[str, str] = {
 
 - Output numbered implementation plan only
 - No file modifications allowed""",
+    },
 }
 
 
