@@ -38,6 +38,7 @@ from meto.agent.context import format_context_summary, save_agent_context
 from meto.agent.frontmatter_loader import parse_yaml_frontmatter
 from meto.agent.modes.plan import PlanMode
 from meto.agent.session import Session, generate_session_id
+from meto.agent.skill_loader import get_skill_loader
 from meto.conf import settings
 
 
@@ -371,6 +372,14 @@ def _cmd_agents(_args: list[str], _session: Session) -> None:
         print(f"               tools: {tools_str}")
 
 
+def _cmd_skills(_args: list[str], _session: Session) -> None:
+    """List all available skills."""
+    skills = get_skill_loader().get_skill_descriptions()
+    print("Available skills:")
+    for name, description in sorted(skills.items()):
+        print(f"  {name:<20} - {description}")
+
+
 def _cmd_plan(_args: list[str], session: Session) -> None:
     """Enter plan mode for systematic exploration and planning."""
     if session.mode is not None:
@@ -502,6 +511,10 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     "/quit": SlashCommandSpec(
         handler=_cmd_quit,
         description="Exit meto",
+    ),
+    "/skills": SlashCommandSpec(
+        handler=_cmd_skills,
+        description="List all available skills",
     ),
     "/todos": SlashCommandSpec(
         handler=_cmd_todos,
