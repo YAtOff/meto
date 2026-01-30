@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from meto.agent.skill_loader import get_skill_loader
 
 if TYPE_CHECKING:
+    from meto.agent.agent import Agent
     from meto.agent.session import Session
 
 # Base system prompt template.
@@ -48,7 +49,7 @@ Skills (via load_skill tool):
 """
 
 
-def build_system_prompt(session: "Session | None" = None) -> str:
+def build_system_prompt(session: "Session | None" = None, agent: "Agent | None" = None) -> str:
     """Build the system prompt.
 
     Appends project memory/user instructions from AGENTS.md in the current
@@ -56,6 +57,7 @@ def build_system_prompt(session: "Session | None" = None) -> str:
 
     Args:
         session: Optional session for plan mode context
+        agent: Optional agent for agent-specific prompt
 
     Note: This intentionally does not cache; it re-reads AGENTS.md each call.
     """
@@ -77,6 +79,10 @@ def build_system_prompt(session: "Session | None" = None) -> str:
         fragment = session.mode.system_prompt_fragment()
         if fragment:
             prompt += fragment
+
+    # Allow agents to augment the prompt (e.g., planner agent instructions)
+    if agent and agent.prompt:
+        prompt += f"\n\n----- AGENT INSTRUCTIONS -----\n{agent.prompt}\n----- END AGENT INSTRUCTIONS -----"
 
     agents_path = Path(cwd) / "AGENTS.md"
     begin = "----- BEGIN AGENTS.md (project instructions) -----"
