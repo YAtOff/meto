@@ -9,7 +9,6 @@ Architectural constraint:
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 # Model-facing tool schemas (OpenAI function calling / tools API).
@@ -268,8 +267,8 @@ TOOLS: list[dict[str, Any]] = [
             "name": "load_skill",
             "description": (
                 "Load domain expertise for specialized tasks. "
-                "Use when you need domain-specific knowledge not in your base knowledge.\n"
-                "{skill_descriptions}"
+                "Use when you need domain-specific knowledge not in your base knowledge. "
+                "Available skills are listed in the system prompt."
             ),
             "parameters": {
                 "type": "object",
@@ -288,38 +287,3 @@ TOOLS: list[dict[str, Any]] = [
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}
 AVAILABLE_TOOLS = list(TOOLS_BY_NAME.keys())
-
-
-def populate_skill_descriptions(
-    tools: list[dict[str, Any]], skills: dict[str, str]
-) -> list[dict[str, Any]]:
-    """Populate {skill_descriptions} placeholder in load_skill tool description.
-
-    Args:
-        tools: List of tool schemas (will be deep copied)
-        skills: Dict mapping skill names to descriptions
-
-    Returns:
-        New list of tools with skill descriptions populated
-    """
-    tools_copy = copy.deepcopy(tools)
-
-    # Find load_skill tool and replace placeholder
-    for tool in tools_copy:
-        if tool["function"]["name"] == "load_skill":
-            description = tool["function"]["description"]
-
-            # Format skill descriptions
-            if skills:
-                skill_lines = [f"- {name}: {desc}" for name, desc in sorted(skills.items())]
-                skill_text = "Available skills:\n" + "\n".join(skill_lines)
-            else:
-                skill_text = "No skills currently available."
-
-            # Replace placeholder
-            tool["function"]["description"] = description.replace(
-                "{skill_descriptions}", skill_text
-            )
-            break
-
-    return tools_copy

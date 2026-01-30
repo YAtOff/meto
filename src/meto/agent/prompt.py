@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from meto.agent.skill_loader import get_skill_loader
+
 if TYPE_CHECKING:
     from meto.agent.session import Session
 
@@ -41,8 +43,8 @@ Subagent pattern (via run_task tool):
 
 Skills (via load_skill tool):
 - On-demand domain expertise for specialized tasks
-- Load only when needed for specific domains (e.g., PDF processing, code review)
-- Available skills shown in tool description
+- Load skill content by name when needed
+{skills_list}
 """
 
 
@@ -59,7 +61,16 @@ def build_system_prompt(session: "Session | None" = None) -> str:
     """
 
     cwd = os.getcwd()
-    prompt = SYSTEM_PROMPT.format(cwd=cwd)
+
+    # Build skills list for prompt
+    skills = get_skill_loader().get_skill_descriptions()
+    if skills:
+        skill_lines = [f"- {name}: {desc}" for name, desc in sorted(skills.items())]
+        skills_list = "Available skills:\n" + "\n".join(skill_lines)
+    else:
+        skills_list = "Available skills: (none)"
+
+    prompt = SYSTEM_PROMPT.format(cwd=cwd, skills_list=skills_list)
 
     # Allow session modes to augment the prompt.
     if session and session.mode is not None:

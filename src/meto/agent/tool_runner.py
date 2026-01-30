@@ -404,12 +404,10 @@ def _prompt_permission(tool_name: str, detail: str) -> bool:
 
 
 def _load_skill(skill_name: str) -> str:
-    """Load skill content and return wrapped in XML tags."""
+    """Load skill content and return it."""
     try:
         skill_loader = get_skill_loader()
-        content = skill_loader.get_skill_content(skill_name)
-        # Wrap in XML for clear boundaries
-        return f'<skill-loaded name="{skill_name}">\n{content}\n</skill-loaded>'
+        return skill_loader.get_skill_content(skill_name)
     except ValueError as e:
         return f"Error: {e}"
     except OSError as ex:

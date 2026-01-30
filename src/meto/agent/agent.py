@@ -16,8 +16,6 @@ from typing import Any
 from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
 from meto.agent.session import NullSessionLogger, Session
-from meto.agent.skill_loader import get_skill_loader
-from meto.agent.tool_schema import populate_skill_descriptions
 from meto.conf import settings
 
 
@@ -128,14 +126,7 @@ class Agent:
         self.run_hooks = run_hooks
         self.yolo_mode = yolo_mode
 
-        base_tools = get_tools_for_agent(allowed_tools)
-
-        # Populate skill descriptions for the load_skill tool (if present)
-        if any(tool["function"]["name"] == "load_skill" for tool in base_tools):
-            skills = get_skill_loader().get_skill_descriptions()
-            self.tools = populate_skill_descriptions(base_tools, skills)
-        else:
-            self.tools = base_tools
+        self.tools = get_tools_for_agent(allowed_tools)
 
     @property
     def tool_names(self) -> list[str]:
