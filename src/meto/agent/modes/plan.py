@@ -60,7 +60,7 @@ Workflow:
 1. Use explore/plan agents to understand the codebase
 2. Design implementation with numbered steps
 3. Write the plan to: {plan_file}
-4. Use /done to exit plan mode
+4. Use /implement to start implementation, or /done to exit plan mode
 
 - Use run_task tool with explore/plan agents for systematic planning
 - Do NOT make file modifications during planning (except the plan file)
