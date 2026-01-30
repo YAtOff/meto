@@ -234,16 +234,16 @@ class CustomCommandResult:
 
 
 def _execute_custom_command(
-    args: list[str],
+    _args: list[str],
     command_path: Path,
-    session: Session,
+    _session: Session,
 ) -> CustomCommandResult:
     """Execute custom command by loading file, parsing frontmatter, substituting args.
 
     Args:
-        args: Command arguments (if any)
+        _args: Command arguments (if any) - unused, reserved for future use
         command_path: Path to the custom command .md file
-        session: Session instance (for potential future use)
+        _session: Session instance - unused, reserved for future use
 
     Returns:
         CustomCommandResult with prompt and execution context
@@ -252,7 +252,6 @@ def _execute_custom_command(
         ValueError: If file cannot be loaded
         ArgumentSubstitutionError: If argument substitution fails
     """
-    del session  # Unused for now, reserved for future use
     spec = _load_custom_command(command_path)
 
     # Warn if agent set without context: fork
@@ -260,7 +259,7 @@ def _execute_custom_command(
         print(f"Warning: 'agent: {spec.agent}' has no effect without 'context: fork'")
 
     # Substitute arguments into body
-    prompt = _substitute_arguments(spec.body, args)
+    prompt = _substitute_arguments(spec.body, _args)
 
     return CustomCommandResult(
         prompt=prompt,
@@ -270,9 +269,8 @@ def _execute_custom_command(
     )
 
 
-def _cmd_clear(args: list[str], session: Session) -> None:
+def _cmd_clear(_args: list[str], session: Session) -> None:
     """Clear conversation history and start new session if persisting."""
-    del args
     session.clear()
     print("History cleared.")
 
@@ -300,9 +298,8 @@ def _get_custom_commands() -> dict[str, CustomCommandSpec]:
     return result
 
 
-def _cmd_help(args: list[str], session: Session) -> None:
+def _cmd_help(_args: list[str], _session: Session) -> None:
     """Show help for available commands."""
-    del args, session  # Unused
 
     # Built-in commands
     print("Built-in commands:")
@@ -321,9 +318,8 @@ def _cmd_help(args: list[str], session: Session) -> None:
             print(f"  {name:<15} - {desc}")
 
 
-def _cmd_quit(args: list[str], session: Session) -> None:
+def _cmd_quit(_args: list[str], _session: Session) -> None:
     """Exit meto."""
-    del args, session  # Unused
     print("Goodbye!")
     raise typer.Exit(code=0)
 
@@ -345,9 +341,8 @@ def _cmd_export(args: list[str], session: Session) -> None:
     )
 
 
-def _cmd_compact(args: list[str], session: Session) -> None:
+def _cmd_compact(_args: list[str], session: Session) -> None:
     """Summarize conversation history to reduce token count."""
-    del args
     _compact_history(session.history)
     session.renew()
 
@@ -360,15 +355,13 @@ def _cmd_context(args: list[str], session: Session) -> None:
     print(format_context_summary(session.history))
 
 
-def _cmd_todos(args: list[str], session: Session) -> None:
+def _cmd_todos(_args: list[str], session: Session) -> None:
     """Show current task list."""
-    del args
     session.todos.print_rich()
 
 
-def _cmd_agents(args: list[str], session: Session) -> None:
+def _cmd_agents(_args: list[str], _session: Session) -> None:
     """List all available agents."""
-    del args, session
     agents = get_all_agents()
     print("Available agents:")
     for name, config in sorted(agents.items()):
@@ -378,9 +371,8 @@ def _cmd_agents(args: list[str], session: Session) -> None:
         print(f"               tools: {tools_str}")
 
 
-def _cmd_plan(args: list[str], session: Session) -> None:
+def _cmd_plan(_args: list[str], session: Session) -> None:
     """Enter plan mode for systematic exploration and planning."""
-    del args
     if session.mode is not None:
         # Keep message backwards-compatible for the common case.
         if isinstance(session.mode, PlanMode):
@@ -396,9 +388,8 @@ def _cmd_plan(args: list[str], session: Session) -> None:
     print("Exit with /done")
 
 
-def _cmd_done(args: list[str], session: Session) -> None:
+def _cmd_done(_args: list[str], session: Session) -> None:
     """Exit plan mode, clear context, and insert plan instruction."""
-    del args
     if session.mode is None:
         print("Not in plan mode.")
         return
@@ -426,9 +417,8 @@ def _cmd_done(args: list[str], session: Session) -> None:
         )
 
 
-def _cmd_implement(args: list[str], session: Session) -> CommandResult | None:
+def _cmd_implement(_args: list[str], session: Session) -> CommandResult | None:
     """Exit plan mode, clear context, insert plan instruction, and prompt to start implementation."""
-    del args
     if session.mode is None:
         print("Not in plan mode.")
         return None
@@ -608,17 +598,18 @@ def _parse_export_args(args: list[str]) -> tuple[str, str, bool]:
         raise ValueError(str(e)) from e
 
 
-def _export_history(
-    history: list[dict[str, Any]],
+def _resolve_export_path(
     export_target: str,
     export_format: str,
-    *,
-    include_system: bool,
-) -> None:
-    """Export conversation history to file.
+) -> Path:
+    """Resolve export target path with appropriate filename and extension.
 
-    By default exports user/assistant/tool messages only. If include_system is True,
-    system messages are included as well.
+    Args:
+        export_target: User-provided path (may be empty, directory, or file)
+        export_format: Output format (json, pretty_json, markdown, text)
+
+    Returns:
+        Resolved Path object with filename and extension
     """
     ext_by_format = {
         "json": ".json",
@@ -634,20 +625,37 @@ def _export_history(
     # - file path without suffix => append inferred extension
     if not export_target:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filepath = Path(f"meto_conversation_{timestamp}{ext}")
-    else:
-        raw = export_target
-        is_directory_hint = raw.endswith("/") or raw.endswith("\\")
-        target_path = Path(raw)
+        return Path(f"meto_conversation_{timestamp}{ext}")
 
-        if (target_path.exists() and target_path.is_dir()) or is_directory_hint:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"meto_conversation_{timestamp}{ext}"
-            filepath = target_path / filename
-        else:
-            filepath = target_path
-            if filepath.suffix == "":
-                filepath = filepath.with_suffix(ext)
+    raw = export_target
+    is_directory_hint = raw.endswith("/") or raw.endswith("\\")
+    target_path = Path(raw)
+
+    if (target_path.exists() and target_path.is_dir()) or is_directory_hint:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"meto_conversation_{timestamp}{ext}"
+        return target_path / filename
+
+    filepath = target_path
+    if filepath.suffix == "":
+        filepath = filepath.with_suffix(ext)
+
+    return filepath
+
+
+def _export_history(
+    history: list[dict[str, Any]],
+    export_target: str,
+    export_format: str,
+    *,
+    include_system: bool,
+) -> None:
+    """Export conversation history to file.
+
+    By default exports user/assistant/tool messages only. If include_system is True,
+    system messages are included as well.
+    """
+    filepath = _resolve_export_path(export_target, export_format)
 
     try:
         save_agent_context(
@@ -661,6 +669,51 @@ def _export_history(
         print(f"Export failed: {e}")
 
 
+def _build_conversation_text(history: list[dict[str, Any]]) -> str:
+    """Build conversation text for summarization (excludes system messages).
+
+    Args:
+        history: Conversation history
+
+    Returns:
+        Concatenated conversation text with role prefixes
+    """
+    return "\n".join(
+        f"{msg['role']}: {msg.get('content', '')}"
+        for msg in history
+        if msg["role"] in ("user", "assistant")
+    )
+
+
+def _summarize_conversation(conversation_text: str) -> str:
+    """Use LLM to create a concise summary of the conversation.
+
+    Args:
+        conversation_text: Conversation text to summarize
+
+    Returns:
+        Concise summary as a single paragraph
+
+    Raises:
+        Exception: If LLM call fails
+    """
+    client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
+
+    resp = client.chat.completions.create(
+        model=settings.DEFAULT_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "Summarize the following conversation concisely. "
+                "Preserve key context, decisions, and technical details. "
+                "Output as a single paragraph.",
+            },
+            {"role": "user", "content": conversation_text},
+        ],
+    )
+    return resp.choices[0].message.content or "Conversation summary unavailable."
+
+
 def _compact_history(history: list[dict[str, Any]]) -> None:
     """Summarize conversation history to reduce token count.
 
@@ -671,33 +724,18 @@ def _compact_history(history: list[dict[str, Any]]) -> None:
         print("No history to compact.")
         return
 
-    # Build conversation text for summarization (exclude system messages)
-    conversation_text = "\n".join(
-        f"{msg['role']}: {msg.get('content', '')}"
-        for msg in history
-        if msg["role"] in ("user", "assistant")
-    )
+    conversation_text = _build_conversation_text(history)
+
+    if not conversation_text:
+        print("No conversation to compact.")
+        return
 
     if not settings.LLM_API_KEY:
         print("METO_LLM_API_KEY is not set. Configure it in .env or environment variables.")
         return
 
-    client = OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
-
     try:
-        resp = client.chat.completions.create(
-            model=settings.DEFAULT_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Summarize the following conversation concisely. "
-                    "Preserve key context, decisions, and technical details. "
-                    "Output as a single paragraph.",
-                },
-                {"role": "user", "content": conversation_text},
-            ],
-        )
-        summary = resp.choices[0].message.content or "Conversation summary unavailable."
+        summary = _summarize_conversation(conversation_text)
 
         # Replace history with a single user message containing the summary
         history.clear()

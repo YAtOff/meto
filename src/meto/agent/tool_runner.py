@@ -126,7 +126,7 @@ def _run_shell(command: str) -> str:
             )
     except subprocess.TimeoutExpired:
         return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
-    except Exception as ex:  # noqa: BLE001
+    except OSError as ex:
         return f"(shell execution error: {ex})"
 
     output = (completed.stdout or "") + (completed.stderr or "")
@@ -145,7 +145,7 @@ def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bo
             return f"Error: Path does not exist: {path}"
         if not dir_path.is_dir():
             return f"Error: Not a directory: {path}"
-    except Exception as ex:
+    except OSError as ex:
         return f"Error accessing path '{path}': {ex}"
 
     lines: list[str] = []
@@ -188,7 +188,7 @@ def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bo
 
     except PermissionError:
         return f"Error: Permission denied accessing: {path}"
-    except Exception as ex:  # noqa: BLE001
+    except OSError as ex:
         return f"Error listing directory: {ex}"
 
     if len(lines) == 1:
@@ -213,7 +213,7 @@ def _read_file(path: str) -> str:
         return f"Error: Cannot decode file {path} as UTF-8 text"
     except PermissionError:
         return f"Error: Permission denied reading {path}"
-    except Exception as ex:  # noqa: BLE001
+    except OSError as ex:
         return f"Error reading file {path}: {ex}"
 
 
@@ -229,7 +229,7 @@ def _write_file(path: str, content: str) -> str:
         return f"Error: Permission denied writing to {path}"
     except IsADirectoryError:
         return f"Error: Path is a directory, not a file: {path}"
-    except Exception as ex:  # noqa: BLE001
+    except OSError as ex:
         return f"Error writing file {path}: {ex}"
 
 
@@ -240,7 +240,7 @@ def _manage_todos(todos: TodoManager, items: list[dict[str, Any]]) -> str:
         result = todos.update(items)
         todos.print_rich()
         return result
-    except Exception as e:
+    except ValueError as e:
         return f"Error: {e}"
 
 
@@ -254,7 +254,7 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
         search_path = Path(path).expanduser().resolve()
         if not search_path.exists():
             return f"Error: Path does not exist: {path}"
-    except Exception as ex:
+    except OSError as ex:
         return f"Error accessing path '{path}': {ex}"
 
     rg = shutil.which("rg")
@@ -282,7 +282,7 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
             )
         except subprocess.TimeoutExpired:
             return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
-        except Exception as ex:  # noqa: BLE001
+        except OSError as ex:
             return f"(search execution error: {ex})"
 
         output = (completed.stdout or "") + (completed.stderr or "")
@@ -319,7 +319,9 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
             return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
     except URLError as e:
         return f"Error fetching {url}: {e}"
-    except Exception as ex:
+    except TimeoutError:
+        return f"Error fetching {url}: timeout after 10s"
+    except OSError as ex:
         return f"Error fetching {url}: {ex}"
 
 
@@ -389,7 +391,7 @@ def _ask_user_question(question: str) -> str:
         return response
     except (EOFError, KeyboardInterrupt):
         return "(user cancelled input)"
-    except Exception as ex:
+    except OSError as ex:
         return f"(error getting user input: {ex})"
 
 
@@ -410,8 +412,99 @@ def _load_skill(skill_name: str) -> str:
         return f'<skill-loaded name="{skill_name}">\n{content}\n</skill-loaded>'
     except ValueError as e:
         return f"Error: {e}"
-    except Exception as e:
-        return f"Error: Failed to load skill '{skill_name}': {e}"
+    except OSError as ex:
+        return f"Error: Failed to load skill '{skill_name}': {ex}"
+
+
+# Type alias for tool handler functions
+ToolHandler = Callable[[dict[str, Any], Session | None], str]
+
+
+def _handle_shell(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle shell command execution."""
+    command = parameters.get("command", "")
+    return _run_shell(command)
+
+
+def _handle_list_dir(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle directory listing."""
+    path = parameters.get("path", ".")
+    recursive = parameters.get("recursive", False)
+    include_hidden = parameters.get("include_hidden", False)
+    return _list_directory(path, recursive, include_hidden)
+
+
+def _handle_read_file(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle file reading."""
+    path = parameters.get("path", "")
+    return _read_file(path)
+
+
+def _handle_write_file(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle file writing."""
+    path = parameters.get("path", "")
+    content = parameters.get("content", "")
+    return _write_file(path, content)
+
+
+def _handle_grep_search(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle pattern search."""
+    pattern = parameters.get("pattern", "")
+    path = parameters.get("path", ".")
+    case_insensitive = parameters.get("case_insensitive", False)
+    return _run_grep_search(pattern, path, case_insensitive)
+
+
+def _handle_fetch(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle URL fetching."""
+    url = parameters.get("url", "")
+    max_bytes = parameters.get("max_bytes", 100000)
+    return _fetch(url, max_bytes)
+
+
+def _handle_manage_todos(parameters: dict[str, Any], session: Session | None) -> str:
+    """Handle todo list management."""
+    if session is None:
+        return "Error: session required for manage_todos"
+    items = parameters.get("items", [])
+    return _manage_todos(session.todos, cast(list[dict[str, Any]], items))
+
+
+def _handle_run_task(
+    parameters: dict[str, Any], _session: Session | None, yolo_mode: bool = False
+) -> str:
+    """Handle subagent task execution."""
+    description = cast(str, parameters.get("description", ""))
+    prompt = cast(str, parameters.get("prompt", ""))
+    agent_name = cast(str, parameters.get("agent_name", ""))
+    return _execute_task(prompt, agent_name, description, yolo_mode)
+
+
+def _handle_ask_user_question(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle user question prompting."""
+    question = parameters.get("question", "")
+    return _ask_user_question(question)
+
+
+def _handle_load_skill(parameters: dict[str, Any], _session: Session | None) -> str:
+    """Handle skill loading."""
+    skill_name = parameters.get("skill_name", "")
+    return _load_skill(skill_name)
+
+
+# Dispatch table mapping tool names to their handler functions
+_TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "shell": _handle_shell,
+    "list_dir": _handle_list_dir,
+    "read_file": _handle_read_file,
+    "write_file": _handle_write_file,
+    "grep_search": _handle_grep_search,
+    "fetch": _handle_fetch,
+    "manage_todos": _handle_manage_todos,
+    "run_task": lambda p, s: _handle_run_task(p, s),  # Wrapped for yolo_mode support
+    "ask_user_question": _handle_ask_user_question,
+    "load_skill": _handle_load_skill,
+}
 
 
 def run_tool(
@@ -452,60 +545,23 @@ def run_tool(
             if not _prompt_permission(tool_name, "(no details available)"):
                 return f"({tool_name} cancelled by user)"
 
+    # Special handling for run_task which needs yolo_mode
+    if tool_name == "run_task":
+        return _handle_run_task(parameters, session, yolo_mode)
+
     tool_output = ""
-    try:
-        if tool_name == "shell":
-            command = parameters.get("command", "")
-            tool_output = _run_shell(command)
-        elif tool_name == "list_dir":
-            path = parameters.get("path", ".")
-            recursive = parameters.get("recursive", False)
-            include_hidden = parameters.get("include_hidden", False)
-            tool_output = _list_directory(path, recursive, include_hidden)
-        elif tool_name == "read_file":
-            path = parameters.get("path", "")
-            tool_output = _read_file(path)
-        elif tool_name == "write_file":
-            path = parameters.get("path", "")
-            content = parameters.get("content", "")
-            tool_output = _write_file(path, content)
-        elif tool_name == "grep_search":
-            pattern = parameters.get("pattern", "")
-            path = parameters.get("path", ".")
-            case_insensitive = parameters.get("case_insensitive", False)
-            tool_output = _run_grep_search(pattern, path, case_insensitive)
-        elif tool_name == "fetch":
-            url = parameters.get("url", "")
-            max_bytes = parameters.get("max_bytes", 100000)
-            tool_output = _fetch(url, max_bytes)
-        elif tool_name == "manage_todos":
-            if session is None:
-                tool_output = "Error: session required for manage_todos"
-            else:
-                items = parameters.get("items", [])
-                tool_output = _manage_todos(session.todos, cast(list[dict[str, Any]], items))
-        elif tool_name == "run_task":
-            description = cast(str, parameters.get("description", ""))
-            prompt = cast(str, parameters.get("prompt", ""))
-            agent_name = cast(str, parameters.get("agent_name", ""))
-            tool_output = _execute_task(prompt, agent_name, description, yolo_mode)
-        elif tool_name == "ask_user_question":
-            question = parameters.get("question", "")
-            tool_output = _ask_user_question(question)
-        elif tool_name == "load_skill":
-            skill_name = parameters.get("skill_name", "")
-            tool_output = _load_skill(skill_name)
+    handler = _TOOL_HANDLERS.get(tool_name)
+
+    if handler is None:
+        tool_output = f"Error: Unknown tool: {tool_name}"
+    else:
+        try:
+            tool_output = handler(parameters, session)
             if logger:
-                logger.log_skill_loaded(skill_name)
-
-        else:
-            tool_output = f"Error: Unknown tool: {tool_name}"
-
-        if logger:
-            logger.log_tool_execution(tool_name, tool_output, error=False)
-    except Exception as e:
-        tool_output = str(e)
-        if logger:
-            logger.log_tool_execution(tool_name, tool_output, error=True)
+                logger.log_tool_execution(tool_name, tool_output, error=False)
+        except Exception as e:
+            tool_output = str(e)
+            if logger:
+                logger.log_tool_execution(tool_name, tool_output, error=True)
 
     return tool_output

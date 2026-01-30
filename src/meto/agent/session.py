@@ -233,7 +233,7 @@ class Session:
         self.mode = mode
 
     def exit_mode(self) -> ModeExitResult | None:
-        """Exit the current session mode, if any."""
+        """Exit current session mode, if any."""
 
         if self.mode is None:
             return None
