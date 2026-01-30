@@ -41,6 +41,11 @@ class SessionMode(ABC):
     def name(self) -> str:
         """Short human-friendly name for the mode (e.g., "plan")."""
 
+    @property
+    def agent_name(self) -> str | None:
+        """Optional agent name to use instead of main agent (e.g., "planner")."""
+        return None
+
     @abstractmethod
     def prompt_prefix(self, default_prompt: str) -> str:
         """Return the prompt string to show in interactive mode."""

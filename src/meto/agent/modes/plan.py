@@ -39,6 +39,11 @@ class PlanMode(SessionMode):
     def name(self) -> str:
         return "plan"
 
+    @property
+    @override
+    def agent_name(self) -> str | None:
+        return "planner"
+
     @override
     def prompt_prefix(self, default_prompt: str) -> str:
         del default_prompt

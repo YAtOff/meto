@@ -43,6 +43,12 @@ def interactive_loop(
     main_agent = Agent.main(session, yolo_mode=yolo_mode)
     prompt_session = PromptSession(editing_mode=EditingMode.EMACS)
 
+    def get_agent_for_session() -> Agent:
+        """Get the appropriate agent based on session mode."""
+        if session.mode and session.mode.agent_name:
+            return Agent.subagent(session.mode.agent_name, yolo_mode=yolo_mode)
+        return main_agent
+
     while True:
         # Dynamic prompt based on active session mode
         current_prompt = (
@@ -70,7 +76,7 @@ def interactive_loop(
                             else Agent.fork(cmd_result.allowed_tools or "*", yolo_mode=yolo_mode)
                         )
                     else:
-                        agent = main_agent
+                        agent = get_agent_for_session()
 
                     for output in run_agent_loop(cmd_result.prompt, agent):
                         print(output)
@@ -80,7 +86,7 @@ def interactive_loop(
 
         # No slash command, run agent loop with user input
         try:
-            for output in run_agent_loop(user_input, main_agent):
+            for output in run_agent_loop(user_input, get_agent_for_session()):
                 print(output)
         except AgentInterrupted:
             print("\n[Agent interrupted]")
