@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from meto.conf import settings
+
 
 def dump_agent_context(
     history: list[dict[str, Any]],
@@ -212,6 +214,21 @@ def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(fn_name, str) and fn_name:
                 tools_used.add(fn_name)
 
+    # Sum actual prompt_tokens from assistant messages
+    total_prompt_tokens = sum(m.get("prompt_tokens", 0) for m in assistant_messages)
+    total_completion_tokens = sum(m.get("completion_tokens", 0) for m in assistant_messages)
+    total_tokens = total_prompt_tokens + total_completion_tokens
+
+    # Fall back to estimate if no actual tokens tracked
+    tokens_estimate = _estimate_tokens(history)
+    using_actual = total_prompt_tokens > 0
+
+    # Calculate context window %
+    model = settings.DEFAULT_MODEL
+    window = settings.MODEL_CONTEXT_WINDOWS.get(model, 128000)
+    base_tokens = total_prompt_tokens if using_actual else tokens_estimate
+    context_percent = (base_tokens / window) * 100
+
     return {
         "timestamp": datetime.now().isoformat(),
         "total_messages": len(history),
@@ -221,7 +238,14 @@ def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
         "system_messages": len(system_messages),
         "total_tool_calls": total_tool_calls,
         "unique_tools_used": sorted(tools_used),
-        "total_tokens_estimate": _estimate_tokens(history),
+        "total_prompt_tokens": total_prompt_tokens,
+        "total_completion_tokens": total_completion_tokens,
+        "total_tokens": total_tokens if using_actual else tokens_estimate,
+        "total_tokens_estimate": tokens_estimate,
+        "using_actual_tokens": using_actual,
+        "context_window_percent": context_percent,
+        "context_window_size": window,
+        "model": model,
         "project_instructions": _get_agents_md_metadata(),
     }
 
@@ -312,7 +336,19 @@ def format_context_summary(history: list[dict[str, Any]]) -> str:
     lines.append("")
     lines.append(f"Tool calls:        {summary.get('total_tool_calls', 0)}")
     lines.append(f"Unique tools used: {tools_str}")
-    lines.append(f"Token estimate:    {summary.get('total_tokens_estimate', 0)}")
+
+    # Token usage
+    if summary.get("using_actual_tokens"):
+        lines.append(f"Prompt tokens:     {summary.get('total_prompt_tokens', 0)}")
+        lines.append(f"Completion tokens: {summary.get('total_completion_tokens', 0)}")
+        lines.append(f"Total tokens:      {summary.get('total_tokens', 0)}")
+    else:
+        lines.append(f"Token estimate:    {summary.get('total_tokens_estimate', 0)}")
+
+    # Context window
+    lines.append(
+        f"Context window:    {summary.get('context_window_percent', 0):.1f}% of {summary.get('context_window_size', 0):,} ({summary.get('model', '')})"
+    )
 
     project_instructions_raw = summary.get("project_instructions")
     if isinstance(project_instructions_raw, dict):

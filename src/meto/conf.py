@@ -38,6 +38,16 @@ class Settings(BaseSettings):
         description="Default model name to use with LiteLLM",
     )
 
+    MODEL_CONTEXT_WINDOWS: dict[str, int] = Field(
+        default={
+            "gpt-4.1": 128000,
+            "gpt-4o": 128000,
+            "gpt-4o-mini": 128000,
+            "claude-sonnet-4": 200000,
+        },
+        description="Context window sizes per model.",
+    )
+
     # --- Agent loop tuning ---
 
     MAIN_AGENT_MAX_TURNS: int = Field(

@@ -116,6 +116,9 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             }
             if tool_calls:
                 assistant_message["tool_calls"] = [tc.model_dump() for tc in tool_calls]
+            if resp.usage:
+                assistant_message["prompt_tokens"] = resp.usage.prompt_tokens
+                assistant_message["completion_tokens"] = resp.usage.completion_tokens
             agent.session.history.append(assistant_message)
             agent.session.session_logger.log_assistant(
                 assistant_message["content"], assistant_message.get("tool_calls")
