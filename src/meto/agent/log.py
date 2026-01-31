@@ -139,8 +139,8 @@ class ReasoningLogger:
             )
             # Also print to console for user visibility
             self.console.print(
-                f"[dim]📊 Tokens: {response.usage.prompt_tokens} sent, "
-                f"{response.usage.completion_tokens} received[/]"
+                f"[dim]📊 Tokens: {response.usage.prompt_tokens} ↗️, "
+                f"{response.usage.completion_tokens} ↘️[/]"
             )
 
     def log_tool_selection(self, tool_name: str, arguments: dict[str, Any]) -> None:
