@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, override
 
 from rich.console import Console
+from rich.panel import Panel
 
 from meto.conf import settings
 
@@ -174,3 +175,17 @@ class ReasoningLogger:
             f"Loop completed after {self.turn_count} turns. Reason: {reason}",
         )
         self.console.print(f"[dim]Done: {reason}[/]")
+
+    def log_system_prompt(self, prompt: str) -> None:
+        """Log the system prompt being sent to the model."""
+        self._log(logging.INFO, f"System prompt: {prompt[:500]}...")
+        if settings.LOG_SYSTEM_PROMPT:
+            display_prompt = prompt[:1000] + "..." if len(prompt) > 1000 else prompt
+            self.console.print(
+                Panel(
+                    display_prompt,
+                    title="[bold]System Prompt[/]",
+                    border_style="dim blue",
+                    padding=(0, 1),
+                )
+            )
