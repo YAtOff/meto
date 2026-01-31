@@ -34,10 +34,9 @@ class Agent:
     tools: list[dict[str, Any]]
     max_turns: int
     run_hooks: bool
-    yolo_mode: bool
 
     @classmethod
-    def main(cls, session: Session, yolo_mode: bool = False) -> Agent:
+    def main(cls, session: Session) -> Agent:
         """Create the main (interactive) agent.
 
         The main agent:
@@ -52,15 +51,18 @@ class Agent:
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
             run_hooks=True,
-            yolo_mode=yolo_mode,
         )
 
     @classmethod
-    def subagent(cls, name: str, yolo_mode: bool = False) -> Agent:
+    def subagent(cls, name: str, parent_session: Session) -> Agent:
         """Create an isolated subagent.
 
         Subagents run with a fresh session (no shared history) and a stricter
         tool allowlist defined by the agent registry. They never run hooks.
+
+        Args:
+            name: Name of the agent to create
+            parent_session: Parent session to inherit yolo_mode from
         """
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
@@ -71,31 +73,39 @@ class Agent:
             return cls(
                 name=name,
                 prompt=prompt,
-                session=Session(session_logger_cls=NullSessionLogger),
+                session=Session(
+                    session_logger_cls=NullSessionLogger,
+                    yolo_mode=parent_session.yolo_mode,
+                ),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
                 run_hooks=False,
-                yolo_mode=yolo_mode,
             )
 
         available = ", ".join(sorted(all_agents.keys()))
         raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     @classmethod
-    def fork(cls, allowed_tools: list[str] | str, yolo_mode: bool = False) -> Agent:
+    def fork(cls, allowed_tools: list[str] | str, parent_session: Session) -> Agent:
         """Create a generic subagent with an explicit tool allowlist.
 
         Used for custom commands that want to restrict tool access
         without creating a full agent configuration.
+
+        Args:
+            allowed_tools: Tool allowlist for the forked agent
+            parent_session: Parent session to inherit yolo_mode from
         """
         return cls(
             name="fork",
             prompt="",
-            session=Session(session_logger_cls=NullSessionLogger),
+            session=Session(
+                session_logger_cls=NullSessionLogger,
+                yolo_mode=parent_session.yolo_mode,
+            ),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
             run_hooks=False,
-            yolo_mode=yolo_mode,
         )
 
     def __init__(
@@ -106,7 +116,6 @@ class Agent:
         allowed_tools: list[str] | str,
         max_turns: int,
         run_hooks: bool = False,
-        yolo_mode: bool = False,
     ) -> None:
         """Create an Agent.
 
@@ -117,14 +126,12 @@ class Agent:
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
             run_hooks: If True, run lifecycle hooks for this agent.
-            yolo_mode: If True, skip tool permission prompts.
         """
         self.name = name
         self.prompt = prompt
         self.session = session
         self.max_turns = max_turns
         self.run_hooks = run_hooks
-        self.yolo_mode = yolo_mode
 
         self.tools = get_tools_for_agent(allowed_tools)
 

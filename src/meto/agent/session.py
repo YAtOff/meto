@@ -198,11 +198,13 @@ class Session:
     todos: TodoManager
     mode: SessionMode | None
     last_mode_exit: ModeExitResult | None
+    yolo_mode: bool
 
     def __init__(
         self,
         sid: str | None = None,
         session_logger_cls: type[SessionLogger] | None = None,
+        yolo_mode: bool | None = None,
     ) -> None:
         self.session_logger_cls = session_logger_cls or FileSessionLogger
         if sid:
@@ -216,6 +218,7 @@ class Session:
         self.todos = TodoManager()
         self.mode = None
         self.last_mode_exit = None
+        self.yolo_mode = yolo_mode if yolo_mode is not None else settings.YOLO_MODE
 
     def enter_mode(self, mode: SessionMode) -> None:
         """Enter a session mode.

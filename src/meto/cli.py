@@ -36,7 +36,6 @@ def _strip_single_trailing_newline(text: str) -> str:
 def _run_single_prompt(
     user_input: str,
     session: Session,
-    yolo_mode: bool,
     main_agent: Agent | None = None,
 ) -> None:
     """Run a single user prompt with slash command handling.
@@ -44,17 +43,16 @@ def _run_single_prompt(
     Args:
         user_input: Raw user input (may be a slash command or regular prompt)
         session: Session instance for conversation history
-        yolo_mode: If True, skip tool permission prompts
         main_agent: Pre-configured main agent (optional, will be created if None)
     """
 
     # Create main agent if not provided (lazy creation)
-    main_agent = main_agent or Agent.main(session, yolo_mode=yolo_mode)
+    main_agent = main_agent or Agent.main(session)
 
     def get_agent_for_session() -> Agent:
         """Get the appropriate agent based on session mode."""
         if session.mode and session.mode.agent_name:
-            return Agent.subagent(session.mode.agent_name, yolo_mode=yolo_mode)
+            return Agent.subagent(session.mode.agent_name, session)
         return main_agent
 
     # Handle slash commands
@@ -65,9 +63,9 @@ def _run_single_prompt(
             # Determine agent based on context
             if cmd_result.context == "fork":
                 agent = (
-                    Agent.subagent(cmd_result.agent, yolo_mode=yolo_mode)
+                    Agent.subagent(cmd_result.agent, session)
                     if cmd_result.agent
-                    else Agent.fork(cmd_result.allowed_tools or "*", yolo_mode=yolo_mode)
+                    else Agent.fork(cmd_result.allowed_tools or "*", session)
                 )
             else:
                 agent = get_agent_for_session()
@@ -87,8 +85,9 @@ def interactive_loop(
     yolo_mode: bool = False,
 ) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
-    session = session or Session()
-    main_agent = Agent.main(session, yolo_mode=yolo_mode)
+    session = session or Session(yolo_mode=yolo_mode)
+
+    main_agent = Agent.main(session)
     prompt_session = PromptSession(editing_mode=EditingMode.EMACS)
 
     while True:
@@ -105,7 +104,7 @@ def interactive_loop(
             return
 
         # Run single prompt (handles slash commands, agent selection, execution)
-        _run_single_prompt(user_input, session, yolo_mode, main_agent)
+        _run_single_prompt(user_input, session, main_agent)
 
 
 @app.callback(invoke_without_command=True)
@@ -138,13 +137,15 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    session = Session(sid=session_id) if session_id else Session()
     yolo_mode = yolo if yolo is not None else settings.YOLO_MODE
+    session = (
+        Session(sid=session_id, yolo_mode=yolo_mode) if session_id else Session(yolo_mode=yolo_mode)
+    )
 
     if one_shot:
         text = _strip_single_trailing_newline(sys.stdin.read())
         try:
-            _run_single_prompt(text, session, yolo_mode)
+            _run_single_prompt(text, session)
         except AgentInterrupted:
             print("\n[Agent interrupted]", file=sys.stderr)
             raise typer.Exit(code=130) from None

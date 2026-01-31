@@ -328,8 +328,8 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
 def _execute_task(
     prompt: str,
     agent_name: str,
+    parent_session: Session,
     description: str | None = None,
-    yolo_mode: bool = False,
 ) -> str:
     """Execute task in isolated subagent via direct `run_agent_loop` call."""
 
@@ -357,7 +357,7 @@ def _execute_task(
 
     # Run subagent
     try:
-        agent = Agent.subagent(agent_name, yolo_mode=yolo_mode)
+        agent = Agent.subagent(agent_name, parent_session)
         # Allow subagents that have access to `run_task` to spawn further subagents.
         output = "\n".join(run_agent_loop(prompt, agent))
         result = _truncate(
@@ -468,14 +468,14 @@ def _handle_manage_todos(parameters: dict[str, Any], session: Session | None) ->
     return _manage_todos(session.todos, cast(list[dict[str, Any]], items))
 
 
-def _handle_run_task(
-    parameters: dict[str, Any], _session: Session | None, yolo_mode: bool = False
-) -> str:
+def _handle_run_task(parameters: dict[str, Any], session: Session | None) -> str:
     """Handle subagent task execution."""
+    if session is None:
+        return "Error: session required for run_task"
     description = cast(str, parameters.get("description", ""))
     prompt = cast(str, parameters.get("prompt", ""))
     agent_name = cast(str, parameters.get("agent_name", ""))
-    return _execute_task(prompt, agent_name, description, yolo_mode)
+    return _execute_task(prompt, agent_name, session, description)
 
 
 def _handle_ask_user_question(parameters: dict[str, Any], _session: Session | None) -> str:
@@ -499,7 +499,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "grep_search": _handle_grep_search,
     "fetch": _handle_fetch,
     "manage_todos": _handle_manage_todos,
-    "run_task": lambda p, s: _handle_run_task(p, s),  # Wrapped for yolo_mode support
+    "run_task": _handle_run_task,
     "ask_user_question": _handle_ask_user_question,
     "load_skill": _handle_load_skill,
 }
@@ -510,7 +510,6 @@ def run_tool(
     parameters: dict[str, Any],
     logger: Any | None = None,
     session: Session | None = None,
-    yolo_mode: bool = False,
 ) -> str:
     """Dispatch and execute a single tool call.
 
@@ -518,7 +517,7 @@ def run_tool(
     tools requested by the model.
 
     Notes:
-        - Permission prompting is enforced here (unless *yolo_mode* is enabled).
+        - Permission prompting is enforced here (unless session.yolo_mode is enabled).
         - The return value is always a human-readable string that is appended to
           the conversation history as a tool message.
 
@@ -526,11 +525,13 @@ def run_tool(
         tool_name: Name of the tool to execute.
         parameters: JSON-like tool arguments.
         logger: Optional reasoning logger for structured trace output.
-        session: Session object (required for tools that mutate session state).
-        yolo_mode: If True, skip interactive permission prompts.
+        session: Session object (required for most tools).
     """
     if logger:
         logger.log_tool_selection(tool_name, parameters)
+
+    # Determine yolo_mode from session
+    yolo_mode = session.yolo_mode if session else False
 
     # Check permission if required and not in yolo mode
     if not yolo_mode:
@@ -542,10 +543,6 @@ def run_tool(
         else:
             if not _prompt_permission(tool_name, "(no details available)"):
                 return f"({tool_name} cancelled by user)"
-
-    # Special handling for run_task which needs yolo_mode
-    if tool_name == "run_task":
-        return _handle_run_task(parameters, session, yolo_mode)
 
     tool_output = ""
     handler = _TOOL_HANDLERS.get(tool_name)
