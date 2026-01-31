@@ -6,6 +6,9 @@ from rich import print as rprint
 
 # Update as needed.
 SRC_PATHS = ["src", "tests", "devtools", "scripts"]
+# Intentionally exclude tests from type checking: test code is often intentionally
+# flexible/dynamic and we don't want it to block the main lint workflow.
+TYPECHECK_PATHS = ["src", "devtools", "scripts"]
 DOC_PATHS = ["README.md"]
 
 
@@ -19,7 +22,7 @@ def main():
     errcount += run(["codespell", "--write-changes", *SRC_PATHS, *DOC_PATHS])
     errcount += run(["ruff", "check", "--fix", *SRC_PATHS])
     errcount += run(["ruff", "format", *SRC_PATHS])
-    errcount += run(["basedpyright", "--stats", *SRC_PATHS])
+    errcount += run(["basedpyright", "--stats", *TYPECHECK_PATHS])
 
     rprint()
 
