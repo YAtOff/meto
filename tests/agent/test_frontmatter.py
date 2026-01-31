@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from meto.agent.frontmatter_loader import parse_yaml_frontmatter
+from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
 
 
 def test_parse_yaml_frontmatter_with_frontmatter() -> None:

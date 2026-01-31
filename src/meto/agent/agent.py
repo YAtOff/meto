@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from meto.agent.agent_registry import get_all_agents, get_tools_for_agent
 from meto.agent.exceptions import SubagentError
+from meto.agent.loaders import get_all_agents, get_tools_for_agent
 from meto.agent.session import NullSessionLogger, Session
 from meto.conf import settings
 

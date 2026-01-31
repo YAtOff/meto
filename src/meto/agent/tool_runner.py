@@ -29,9 +29,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from meto.agent.agent import Agent
+from meto.agent.loaders import get_skill_loader
 from meto.agent.permission_policy import PERMISSION_REQUIRED
 from meto.agent.session import Session
-from meto.agent.skill_loader import get_skill_loader
+from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.agent.todo import TodoManager
 from meto.conf import settings
 
@@ -54,86 +55,6 @@ class ToolRunner(Protocol):
 
 
 SubagentExecutor = Callable[[str, str, str | None], str]
-
-
-def _pick_shell_runner() -> list[str] | None:
-    """Pick an available shell runner.
-
-    We prefer bash if present (Git Bash / WSL), otherwise PowerShell.
-    Returns a base argv list to which the actual command string should be appended.
-    """
-
-    bash = shutil.which("bash")
-    if bash:
-        return [bash, "-lc"]
-
-    pwsh = shutil.which("pwsh")
-    if pwsh:
-        return [pwsh, "-NoProfile", "-Command"]
-
-    powershell = shutil.which("powershell")
-    if powershell:
-        return [powershell, "-NoProfile", "-Command"]
-
-    return None
-
-
-def _truncate(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    return text[:limit] + f"\n... (truncated to {limit} chars)"
-
-
-def _format_size(size: float) -> str:
-    """Format file size in human-readable format."""
-
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024:
-            return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TB"
-
-
-def _run_shell(command: str) -> str:
-    """Execute a shell command and return combined stdout/stderr."""
-
-    if not command.strip():
-        return "(empty command)"
-
-    runner = _pick_shell_runner()
-    try:
-        if runner is None:
-            completed = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=settings.TOOL_TIMEOUT_SECONDS,
-                cwd=os.getcwd(),
-            )
-        else:
-            completed = subprocess.run(
-                [*runner, command],
-                shell=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=settings.TOOL_TIMEOUT_SECONDS,
-                cwd=os.getcwd(),
-            )
-    except subprocess.TimeoutExpired:
-        return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
-    except OSError as ex:
-        return f"(shell execution error: {ex})"
-
-    output = (completed.stdout or "") + (completed.stderr or "")
-    output = output.strip()
-    if not output:
-        output = "(empty)"
-    return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
 
 
 def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
@@ -169,7 +90,7 @@ def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bo
                 except OSError:
                     pass
 
-            size_str = _format_size(size) if entry.is_file() else ""
+            size_str = format_size(size) if entry.is_file() else ""
             try:
                 mtime = datetime.fromtimestamp(entry.stat().st_mtime)
                 mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
@@ -208,7 +129,7 @@ def _read_file(path: str) -> str:
             return f"Error: Not a file: {path}"
 
         content = file_path.read_text(encoding="utf-8")
-        return _truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+        return truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
     except UnicodeDecodeError:
         return f"Error: Cannot decode file {path} as UTF-8 text"
     except PermissionError:
@@ -287,9 +208,9 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
 
         output = (completed.stdout or "") + (completed.stderr or "")
         output = output.strip() or "(empty)"
-        return _truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
+        return truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
     else:
-        runner = _pick_shell_runner()
+        runner = pick_shell_runner()
         if runner and ("bash" in runner[0] or "sh" in runner[0]):
             flag = "-i" if case_insensitive else ""
             cmd = f'grep -R {flag} -n "{pattern}" "{path}" 2>/dev/null || true'
@@ -302,7 +223,7 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
         else:
             return "Error: No suitable search tool found (need rg, grep, or PowerShell)"
 
-    return _run_shell(cmd)
+    return run_shell(cmd)
 
 
 def _fetch(url: str, max_bytes: int = 100000) -> str:
@@ -316,7 +237,7 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
         req = Request(url, headers={"User-Agent": "meto/0"})
         with urlopen(req, timeout=10) as resp:
             data = resp.read(max_bytes + 1)
-            return _truncate(data.decode("utf-8", errors="replace"), max_bytes)
+            return truncate(data.decode("utf-8", errors="replace"), max_bytes)
     except URLError as e:
         return f"Error fetching {url}: {e}"
     except TimeoutError:
@@ -360,9 +281,7 @@ def _execute_task(
         agent = Agent.subagent(agent_name, parent_session)
         # Allow subagents that have access to `run_task` to spawn further subagents.
         output = "\n".join(run_agent_loop(prompt, agent))
-        result = _truncate(
-            output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS
-        )
+        result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
     except Exception as ex:
         result = f"(subagent error: {ex})"
 
@@ -421,7 +340,7 @@ ToolHandler = Callable[[dict[str, Any], Session | None], str]
 def _handle_shell(parameters: dict[str, Any], _session: Session | None) -> str:
     """Handle shell command execution."""
     command = parameters.get("command", "")
-    return _run_shell(command)
+    return run_shell(command)
 
 
 def _handle_list_dir(parameters: dict[str, Any], _session: Session | None) -> str:

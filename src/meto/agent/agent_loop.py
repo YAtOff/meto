@@ -25,8 +25,8 @@ from openai import OpenAI
 
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import get_hooks_manager
-from meto.agent.log import ReasoningLogger
-from meto.agent.prompt import build_system_prompt
+from meto.agent.reasoning_log import ReasoningLogger
+from meto.agent.system_prompt import build_system_prompt
 from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
 from meto.conf import settings
 

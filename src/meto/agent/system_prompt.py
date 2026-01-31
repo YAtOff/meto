@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from meto.agent.skill_loader import get_skill_loader
+from meto.agent.loaders import get_skill_loader
 
 if TYPE_CHECKING:
     from meto.agent.agent import Agent

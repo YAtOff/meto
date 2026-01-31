@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from meto.agent.context import dump_agent_context, get_context_summary, save_agent_context
+from meto.agent.history_export import dump_agent_context, get_context_summary, save_agent_context
 
 
 def _sample_history() -> list[dict[str, object]]:

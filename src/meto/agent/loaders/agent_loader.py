@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from meto.agent.exceptions import ToolNotFoundError
-from meto.agent.frontmatter_loader import parse_yaml_frontmatter
+from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
 from meto.agent.tool_schema import TOOLS, TOOLS_BY_NAME
 from meto.conf import settings
 

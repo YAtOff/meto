@@ -39,7 +39,7 @@ def test_hooks_manager_get_hooks_for_event_filters_by_tool() -> None:
 
 def test_run_hooks_executes_real_subprocess_and_can_block(monkeypatch: pytest.MonkeyPatch) -> None:
     # Use python -c so we don't depend on bash/pwsh quoting behavior.
-    monkeypatch.setattr(hooks_mod, "_pick_shell_runner", lambda: [sys.executable, "-c"])
+    monkeypatch.setattr(hooks_mod, "pick_shell_runner", lambda: [sys.executable, "-c"])
 
     cfg = HooksConfig(
         hooks=[

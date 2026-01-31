@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from meto.agent.agent_registry import clear_agent_cache
 from meto.agent.hooks import reset_hooks_manager_cache
-from meto.agent.skill_loader import clear_skill_cache
+from meto.agent.loaders import clear_agent_cache, clear_skill_cache
 from meto.conf import settings
 
 

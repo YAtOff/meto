@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from meto.agent.agent_registry import AgentLoader, get_tools_for_agent, parse_agent_file
 from meto.agent.exceptions import ToolNotFoundError
+from meto.agent.loaders.agent_loader import AgentLoader, get_tools_for_agent, parse_agent_file
 from meto.agent.tool_schema import TOOLS
 
 

@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -20,6 +19,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from meto.agent.shell import pick_shell_runner
 from meto.conf import settings
 
 logger = logging.getLogger("hooks")
@@ -32,27 +32,6 @@ EXIT_BLOCK = 2
 DEFAULT_HOOK_TIMEOUT = 60
 
 HookEvent = Literal["pre_tool_use", "post_tool_use", "session_start"]
-
-
-def _pick_shell_runner() -> list[str] | None:
-    """Pick an available shell runner.
-
-    We prefer bash if present (Git Bash / WSL), otherwise PowerShell.
-    Returns a base argv list to which the actual command string should be appended.
-    """
-    bash = shutil.which("bash")
-    if bash:
-        return [bash, "-lc"]
-
-    pwsh = shutil.which("pwsh")
-    if pwsh:
-        return [pwsh, "-NoProfile", "-Command"]
-
-    powershell = shutil.which("powershell")
-    if powershell:
-        return [powershell, "-NoProfile", "-Command"]
-
-    return None
 
 
 class HookConfig(BaseModel):
@@ -200,7 +179,7 @@ class HooksManager:
             env["HOOK_INPUT_JSON"] = hook_input.to_json()
 
             # Use shell runner from tool_runner
-            runner = _pick_shell_runner()
+            runner = pick_shell_runner()
             if runner is None:
                 return HookResult(
                     hook_name=hook.name,

@@ -4,8 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from meto.agent.modes.plan import PlanMode
-from meto.agent.prompt import build_system_prompt
 from meto.agent.session import NullSessionLogger, Session
+from meto.agent.system_prompt import build_system_prompt
 
 
 def test_build_system_prompt_includes_agents_md_and_agent_instructions(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from meto.agent.skill_loader import SkillLoader, clear_skill_cache, get_skill_loader
+from meto.agent.loaders.skill_loader import SkillLoader, clear_skill_cache, get_skill_loader
 
 
 def test_skill_loader_discovers_skills_and_returns_descriptions(tmp_path: Path) -> None:

@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypedDict
 
-from meto.agent.frontmatter_loader import parse_yaml_frontmatter
+from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
