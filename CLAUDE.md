@@ -32,15 +32,25 @@ uv tool install --editable .     # install as local tool
 - `src/meto/cli.py` - CLI interface (Typer), interactive mode (prompt-toolkit), one-shot mode
 - `src/meto/agent/agent_loop.py` - Main agent loop: LLM calls, tool execution, history management
 - `src/meto/agent/agent.py` - Agent class with main/subagent factory methods
-- `src/meto/agent/agent_registry.py` - Built-in agents + user agent loader (YAML frontmatter + markdown)
+- `src/meto/agent/loaders/` - Consolidated loader modules
+  - `agent_loader.py` - Built-in agents + user agent loader (YAML frontmatter + markdown)
+  - `skill_loader.py` - Skills discovery, lazy loading, and content management
+  - `frontmatter.py` - YAML frontmatter parsing
+- `src/meto/agent/modes/` - Session mode system
+  - `base.py` - Base mode interface
+  - `plan.py` - Plan mode for systematic exploration and planning
 - `src/meto/agent/tool_schema.py` - Tool schemas (OpenAI function calling format)
 - `src/meto/agent/tool_runner.py` - Tool execution implementations (shell, file ops, grep, fetch, todos, subagents, skills)
+- `src/meto/agent/shell.py` - Shell command execution (bash/PowerShell)
 - `src/meto/agent/session.py` - Session persistence (JSONL), history loading, session logging
+- `src/meto/agent/system_prompt.py` - System prompt building with AGENTS.md support
+- `src/meto/agent/history_export.py` - History export functionality
+- `src/meto/agent/hooks.py` - Hook system for event interception
+- `src/meto/agent/reasoning_log.py` - Reasoning logging
 - `src/meto/agent/todo.py` - Structured task tracking with constraints
 - `src/meto/agent/commands.py` - Interactive slash commands (e.g. `/help`, `/export`, `/compact`, `/todos`)
-- `src/meto/agent/context.py` - Context export formats and summary helpers
-- `src/meto/agent/prompt.py` - System prompt building with AGENTS.md support
-- `src/meto/agent/skill_loader.py` - Skills discovery, lazy loading, and content management
+- `src/meto/agent/exceptions.py` - Custom exceptions
+- `src/meto/agent/permission_policy.py` - Permission handling
 - `src/meto/conf.py` - Pydantic settings from `METO_*` env vars
 
 ### Agent Loop Pattern
@@ -50,6 +60,13 @@ uv tool install --editable .     # install as local tool
 4. If no tool_calls: return
 
 **Subagent pattern**: For isolated subtasks, spawn new agent via `run_task` tool with fresh session history.
+
+### Session Modes
+Modes attach to a `Session` to customize prompt/UI behavior:
+- **Plan mode**: Guides systematic exploration and planning, saves plan to file
+  - Uses `planner` agent (design-only)
+  - Creates plan file in `~/.meto/plans/`
+  - `/implement` starts implementation, `/done` exits
 
 ### Configuration
 Environment variables (`.env` supported):
@@ -62,6 +79,7 @@ Environment variables (`.env` supported):
 - `METO_MAX_TOOL_OUTPUT_CHARS` - Max output (default: 50000)
 - `METO_AGENTS_DIR` - Directory for user-defined agents (default: .meto/agents)
 - `METO_SKILLS_DIR` - Directory for skill directories (default: .meto/skills)
+- `METO_PLAN_DIR` - Directory for plan mode artifacts (default: ~/.meto/plans)
 
 ### Custom Commands
 Slash commands can be defined as Markdown files in `.meto/commands/{name}.md`:
@@ -130,5 +148,6 @@ You are an expert at writing clear, informative git commit messages...
 - Shell tool prefers bash (Git Bash/WSL), falls back to PowerShell on Windows
 - Sessions persist as JSONL in `~/.meto/sessions/`
 - Todo system enforces: max 20 items, only one in_progress at a time
-- Built-in agents: explore (read-only), plan (design-only), code (full access)
+- Built-in agents: explore (read-only), plan (design-only), code (full access), planner (planning mode)
 - Skills system: lazy-loaded expertise modules injected via tool results (preserves prompt cache)
+- Modes system: extensible session states for different workflows (plan mode currently implemented)
