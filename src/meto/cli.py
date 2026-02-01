@@ -33,6 +33,27 @@ def _strip_single_trailing_newline(text: str) -> str:
     return text
 
 
+def _validate_prompt_callback(ctx: typer.Context, prompt: str | None) -> str | None:
+    """Validate that --prompt is only used with --one-shot mode.
+
+    Args:
+        ctx: Typer context providing access to other parameters
+        prompt: The prompt value from the CLI
+
+    Returns:
+        The prompt value unchanged
+
+    Raises:
+        typer.BadParameter: If --prompt is used without --one-shot
+    """
+    if prompt is not None and not ctx.params.get("one_shot", False):
+        raise typer.BadParameter(
+            "--prompt can only be used with --one-shot mode",
+            param_hint="--prompt",
+        )
+    return prompt
+
+
 def _run_single_prompt(
     user_input: str,
     session: Session,
@@ -118,6 +139,14 @@ def run(
             help="Read the prompt from stdin, run the agent loop with it, and exit.",
         ),
     ] = False,
+    prompt: Annotated[
+        str | None,
+        typer.Option(
+            "--prompt",
+            help="Prompt text (only valid with --one-shot mode, stdin takes precedence)",
+            callback=_validate_prompt_callback,
+        ),
+    ] = None,
     session_id: Annotated[
         str | None,
         typer.Option(
@@ -144,9 +173,23 @@ def run(
     )
 
     if one_shot:
-        text = _strip_single_trailing_newline(sys.stdin.read())
+        # Determine input source based on precedence rules
+        if prompt is not None:
+            input_text = prompt.strip()
+        else:
+            # Read stdin once
+            stdin_text = sys.stdin.read()
+            input_text = _strip_single_trailing_newline(stdin_text)
+            if not stdin_text.strip():
+                raise typer.BadParameter(
+                    "Either stdin or --prompt must be provided with --one-shot mode.\n"
+                    "Usage: meto --one-shot [--prompt TEXT] | echo 'your prompt' | meto --one-shot",
+                    param_hint="--one-shot",
+                )
+
+        # Execute the single prompt
         try:
-            _run_single_prompt(text, session)
+            _run_single_prompt(input_text, session)
         except AgentInterrupted:
             print("\n[Agent interrupted]", file=sys.stderr)
             raise typer.Exit(code=130) from None
