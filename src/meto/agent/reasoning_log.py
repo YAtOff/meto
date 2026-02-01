@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 from typing import Any, override
 
 from rich.console import Console
-from rich.panel import Panel
 
 from meto.conf import settings
 
@@ -180,12 +179,49 @@ class ReasoningLogger:
         """Log the system prompt being sent to the model."""
         self._log(logging.INFO, f"System prompt: {prompt[:500]}...")
         if settings.LOG_SYSTEM_PROMPT:
-            display_prompt = prompt[:1000] + "..." if len(prompt) > 1000 else prompt
-            self.console.print(
-                Panel(
-                    display_prompt,
-                    title="[bold]System Prompt[/]",
-                    border_style="dim blue",
-                    padding=(0, 1),
-                )
-            )
+            # Detect which sections are present
+            sections = ["base prompt"]
+
+            if "Available skills:" in prompt:
+                sections.append("skills")
+
+            # Check for agent instructions (comes before mode in string, but added after)
+            # The order in build_system_prompt: base -> mode -> agent instructions -> AGENTS.md
+            # But in the final string: base -> skills -> mode fragment -> agent instructions -> AGENTS.md
+            has_agent_instructions = "----- AGENT INSTRUCTIONS -----" in prompt
+            has_agents_md = "----- BEGIN AGENTS.md" in prompt
+
+            # Mode is trickier - it's inserted between skills and agent instructions
+            # If there's content between "Available skills:" (or base end) and agent instructions/AGENTS.md
+            # A mode fragment exists if:
+            # 1. Agent instructions exist AND there's content between skills and agent instructions
+            # 2. OR no agent instructions but there's content between skills and AGENTS.md
+            skills_end = prompt.rfind("Available skills:")
+            if skills_end == -1:
+                skills_end = prompt.find("Available skills: (none)")
+
+            if skills_end != -1:
+                # Find the end of the skills section (end of that line or next section)
+                lines_after_skills = prompt[skills_end:].split("\n")
+                # Skip the "Available skills:" line and any skill listing lines
+                idx = 1
+                while idx < len(lines_after_skills) and lines_after_skills[idx].strip():
+                    idx += 1
+
+                # Now check what comes after
+                remaining = "\n".join(lines_after_skills[idx:]).strip()
+                # Mode fragment exists if there's content before agent instructions or AGENTS.md
+                if remaining:
+                    # Check if the remaining content starts with agent instructions or AGENTS.md
+                    # If not, it's a mode fragment
+                    if not remaining.startswith("-----"):
+                        sections.append("mode")
+
+            if has_agent_instructions:
+                sections.append("agent instructions")
+
+            if has_agents_md:
+                sections.append("AGENTS.md")
+
+            sections_str = ", ".join(sections)
+            self.console.print(f"[dim]System Prompt sections:[/] {sections_str}")
