@@ -44,6 +44,7 @@ class Settings(BaseSettings):
             "gpt-4o": 128000,
             "gpt-4o-mini": 128000,
             "claude-sonnet-4": 200000,
+            "glm-4.7": 200000,
         },
         description="Context window sizes per model.",
     )
