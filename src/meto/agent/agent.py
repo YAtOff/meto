@@ -15,6 +15,7 @@ from typing import Any
 
 from meto.agent.exceptions import SubagentError
 from meto.agent.loaders import get_all_agents, get_tools_for_agent
+from meto.agent.modes import SessionMode
 from meto.agent.session import NullSessionLogger, Session
 from meto.conf import settings
 
@@ -54,7 +55,7 @@ class Agent:
         )
 
     @classmethod
-    def subagent(cls, name: str, parent_session: Session) -> Agent:
+    def subagent(cls, name: str, parent_session: Session, mode: SessionMode | None = None) -> Agent:
         """Create an isolated subagent.
 
         Subagents run with a fresh session (no shared history) and a stricter
@@ -63,6 +64,7 @@ class Agent:
         Args:
             name: Name of the agent to create
             parent_session: Parent session to inherit yolo_mode from
+            mode: Optional mode to apply to the subagent's session (for plan mode)
         """
         all_agents = get_all_agents()
         agent_config = all_agents.get(name)
@@ -76,6 +78,7 @@ class Agent:
                 session=Session(
                     session_logger_cls=NullSessionLogger,
                     yolo_mode=parent_session.yolo_mode,
+                    mode=mode,
                 ),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
@@ -102,6 +105,7 @@ class Agent:
             session=Session(
                 session_logger_cls=NullSessionLogger,
                 yolo_mode=parent_session.yolo_mode,
+                mode=None,
             ),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,

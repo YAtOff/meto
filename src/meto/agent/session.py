@@ -205,6 +205,7 @@ class Session:
         sid: str | None = None,
         session_logger_cls: type[SessionLogger] | None = None,
         yolo_mode: bool | None = None,
+        mode: SessionMode | None = None,
     ) -> None:
         self.session_logger_cls = session_logger_cls or FileSessionLogger
         if sid:
@@ -216,7 +217,7 @@ class Session:
             self.history = []
             self.session_logger = self.session_logger_cls(self.session_id)
         self.todos = TodoManager()
-        self.mode = None
+        self.mode = mode
         self.last_mode_exit = None
         self.yolo_mode = yolo_mode if yolo_mode is not None else settings.YOLO_MODE
 

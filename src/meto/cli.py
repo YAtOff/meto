@@ -52,7 +52,8 @@ def _run_single_prompt(
     def get_agent_for_session() -> Agent:
         """Get the appropriate agent based on session mode."""
         if session.mode and session.mode.agent_name:
-            return Agent.subagent(session.mode.agent_name, session)
+            # Pass mode so planner agent gets plan file path via system_prompt_fragment()
+            return Agent.subagent(session.mode.agent_name, session, mode=session.mode)
         return main_agent
 
     # Handle slash commands
