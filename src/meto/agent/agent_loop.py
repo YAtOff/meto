@@ -78,7 +78,13 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
         # Run session_start hooks (only for agents that opt into hooks)
         if hooks_manager:
-            hooks_manager.run_hooks("session_start", session_id=agent.session.session_id)
+            results = hooks_manager.run_hooks("session_start", session_id=agent.session.session_id)
+            # Log each hook result
+            for result in results:
+                reasoning_logger.log_hook_result(
+                    event_type="session_start",
+                    result=result,
+                )
 
         reasoning_logger.log_user_input(prompt)
         agent.session.history.append({"role": "user", "content": prompt})
@@ -172,6 +178,14 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                         tool_call_id=tc_any.id,
                         params=arguments,
                     )
+                    # Log each hook result
+                    for result in hook_results:
+                        reasoning_logger.log_hook_result(
+                            event_type="pre_tool_use",
+                            result=result,
+                            tool_name=fn_name,
+                            tool_args=arguments,
+                        )
                     # Check if any hook blocked the tool
                     blocked_hooks = [r for r in hook_results if r.blocked]
                     if blocked_hooks:
@@ -197,7 +211,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
                 # Run post_tool_use hooks
                 if hooks_manager:
-                    hooks_manager.run_hooks(
+                    hook_results = hooks_manager.run_hooks(
                         "post_tool_use",
                         session_id=agent.session.session_id,
                         tool=fn_name,
@@ -205,6 +219,13 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                         params=arguments,
                         result=tool_output[:1000] if tool_output else None,  # Truncate for hooks
                     )
+                    # Log each hook result
+                    for result in hook_results:
+                        reasoning_logger.log_hook_result(
+                            event_type="post_tool_use",
+                            result=result,
+                            tool_name=fn_name,
+                        )
 
                 agent.session.history.append(
                     {

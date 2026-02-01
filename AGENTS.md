@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance to Meto when working with code in this repository.
 
@@ -142,6 +142,35 @@ description: Generate conventional commit messages following best practices
 You are an expert at writing clear, informative git commit messages...
 ```
 
+### Hooks System
+Hooks are shell commands that run at specific lifecycle points, allowing extension of agent behavior:
+
+**Configuration**:
+- Hooks are defined in `.meto/hooks.yaml`
+- Supported events: `session_start`, `pre_tool_use`, `post_tool_use`
+- Each hook has a name, event type, optional tool filter, command, and timeout
+
+**Hook Events**:
+- `session_start`: Runs when a new agent session begins
+- `pre_tool_use`: Runs before a tool is executed (can block execution by exiting with code 2)
+- `post_tool_use`: Runs after a tool completes execution
+
+
+**Example Hook Config** (`.meto/hooks.yaml`):
+```yaml
+hooks:
+  - name: security-check
+    event: pre_tool_use
+    tools: [shell]
+    command: python scripts/check_shell_command.py
+    timeout: 10
+```
+
+**Hook Exit Codes**:
+- `0`: Success, allow operation to proceed
+- `1`: Failure, allow operation to proceed (logged as error)
+- `2`: Block operation (for `pre_tool_use` only)
+
 ### Key Architecture Notes
 - Tool schema (`tool_schema.py`) MUST stay import-light, separate from runtime (`tool_runner.py`)
 - Agent loop uses OpenAI SDK via LiteLLM proxy (model-agnostic)
@@ -151,3 +180,4 @@ You are an expert at writing clear, informative git commit messages...
 - Built-in agents: explore (read-only), plan (design-only), code (full access), planner (planning mode)
 - Skills system: lazy-loaded expertise modules injected via tool results (preserves prompt cache)
 - Modes system: extensible session states for different workflows (plan mode currently implemented)
+- Hooks system: event-driven extension points with comprehensive result logging to reasoning logs

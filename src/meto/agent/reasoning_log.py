@@ -14,6 +14,7 @@ from typing import Any, override
 
 from rich.console import Console
 
+from meto.agent.hooks import HookResult
 from meto.conf import settings
 
 logger = logging.getLogger("agent")
@@ -36,6 +37,13 @@ class JSONFormatter(logging.Formatter):
             "agent_run_id": getattr(record, "agent_run_id", None),
             "turn": getattr(record, "turn", None),
         }
+
+        # Merge hook data if present - hook fields should be at top level
+        hook_data = getattr(record, "hook", None)
+        if hook_data:
+            log_obj.update(hook_data)
+            log_obj["type"] = "hook"
+
         return json.dumps(log_obj)
 
 
@@ -119,7 +127,7 @@ class ReasoningLogger:
 
         msg = response.choices[0].message
         assistant_content = msg.content or ""
-        tool_calls = list(getattr(msg, "tool_calls", None) or [])
+        tool_calls: list[Any] = list(getattr(msg, "tool_calls", None) or [])
 
         self._log(logging.INFO, f"Turn {self.turn_count}: Model response", turn=self.turn_count)
 
@@ -166,6 +174,79 @@ class ReasoningLogger:
         """Log when a skill is loaded."""
         self._log(logging.INFO, f"Skill loaded: {skill_name}")
         self.console.print(f"[dim]ℹ️  Skill loaded: {skill_name}[/]")
+
+    def log_hook_result(
+        self,
+        event_type: str,
+        result: HookResult,
+        tool_name: str | None = None,
+        tool_args: dict[str, Any] | None = None,
+    ) -> None:
+        """Log a hook execution result.
+
+        Args:
+            event_type: The hook event type (session_start, pre_tool_use, post_tool_use)
+            result: The HookResult object containing execution details
+            tool_name: Name of the tool (for pre_tool_use and post_tool_use events)
+            tool_args: Tool arguments (for pre_tool_use events only)
+        """
+        hook_data: dict[str, Any] = {
+            "event": event_type,
+            "hook_name": result.hook_name,
+            "success": result.success,
+            "exit_code": result.exit_code,
+            "blocked": result.blocked,
+            "error": result.error,
+            "stdout": self._truncate_output(result.stdout or ""),
+            "stderr": self._truncate_output(result.stderr or ""),
+        }
+
+        if tool_name:
+            hook_data["tool_name"] = tool_name
+        if tool_args:
+            hook_data["tool_args"] = self._summarize_args(tool_args)
+
+        self._log(logging.INFO, f"Hook: {result.hook_name} ({event_type})", hook=hook_data)
+
+        # Console output
+        status = "[green]✓[/]" if result.success else "[red]✗[/]"
+        if result.blocked:
+            status = "[yellow]🚫[/]"
+
+        self.console.print(f"[dim]🪝 {status} {result.hook_name} ({event_type})[/]")
+
+    def _truncate_output(self, output: str, max_length: int = 1000) -> str:
+        """Truncate output to max_length, adding ellipsis if needed.
+
+        Args:
+            output: The output string to truncate
+            max_length: Maximum length before truncation
+
+        Returns:
+            Truncated output with ellipsis if truncated
+        """
+        if len(output) <= max_length:
+            return output
+        return output[:max_length] + "... (truncated)"
+
+    def _summarize_args(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Summarize tool arguments to avoid logging sensitive data.
+
+        Args:
+            args: Dictionary of tool arguments
+
+        Returns:
+            Summarized arguments with strings truncated and collections showing item counts
+        """
+        summarized: dict[str, Any] = {}
+        for key, value in args.items():
+            if isinstance(value, str):
+                summarized[key] = self._truncate_output(value, 200)
+            elif isinstance(value, (list, dict)):
+                summarized[key] = f"<{type(value).__name__} with {len(value)} items>"
+            else:
+                summarized[key] = str(value)[:200]
+        return summarized
 
     def log_loop_completion(self, reason: str) -> None:
         """Log why the agent loop ended."""
