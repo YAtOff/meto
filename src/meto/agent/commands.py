@@ -351,7 +351,7 @@ def _cmd_context(args: list[str], session: Session) -> None:
     if args:
         print("Usage: /context")
         return
-    print(format_context_summary(session.history))
+    format_context_summary(session.history)
 
 
 def _cmd_todos(_args: list[str], session: Session) -> None:

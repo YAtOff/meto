@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
+from rich.console import Console
+
 from meto.conf import settings
 
 
@@ -303,14 +305,50 @@ def _estimate_tokens(history: list[dict[str, Any]]) -> int:
     return max(1, total_chars // 4)
 
 
-def format_context_summary(history: list[dict[str, Any]]) -> str:
-    """Format a human-readable, multi-line context summary.
+def _format_size(bytes_val: int) -> str:
+    """Format bytes as human-readable string."""
+    size = float(bytes_val)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size < 1024:
+            return f"{int(size)} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+def format_context_summary(history: list[dict[str, Any]]) -> None:
+    """Format and print a human-readable, multi-line context summary.
 
     Intended for interactive surfaces (e.g., the REPL `/context` command).
     The summary always reflects the full history as provided (including system
-    messages, if present).
+    messages, if present). Uses rich.Console for colorful output.
     """
+    console = Console()
     summary = get_context_summary(history)
+
+    # Header
+    console.print()
+    console.print("[bold cyan]Context summary[/]", justify="center")
+    console.print(f"[dim]{'-' * 80}[/]", justify="center")
+
+    # Timestamp & basic info
+    console.print()
+    console.print(f"[dim]Timestamp:[/] {summary.get('timestamp', '')}")
+    console.print(f"[dim]Total messages:[/] [cyan]{summary.get('total_messages', 0)}[/cyan]")
+
+    # Message breakdown by role
+    console.print()
+    console.print("[blue]By role:[/]")
+    console.print(f"  [dim]system:[/]      [blue]{summary.get('system_messages', 0)}[/blue]")
+    console.print(f"  [dim]user:[/]        [blue]{summary.get('user_messages', 0)}[/blue]")
+    console.print(f"  [dim]assistant:[/]   [blue]{summary.get('assistant_messages', 0)}[/blue]")
+    console.print(f"  [dim]tool:[/]        [blue]{summary.get('tool_messages', 0)}[/blue]")
+
+    # Tools section
+    console.print()
+    console.print("[green]Tools:[/]")
+    console.print(
+        f"  [dim]Tool calls:[/]       [green]{summary.get('total_tool_calls', 0)}[/green]"
+    )
 
     tools_raw = summary.get("unique_tools_used")
     tools_list: list[str] = []
@@ -318,61 +356,62 @@ def format_context_summary(history: list[dict[str, Any]]) -> str:
         for item in cast(list[object], tools_raw):
             if isinstance(item, str):
                 tools_list.append(item)
-
     tools_str = ", ".join(tools_list) if tools_list else "(none)"
-
-    # Keep formatting stable for easy copy/paste and grepping.
-    lines: list[str] = []
-    lines.append("Context summary")
-    lines.append("-" * 80)
-    lines.append(f"Timestamp:         {summary.get('timestamp', '')}")
-    lines.append(f"Total messages:    {summary.get('total_messages', 0)}")
-    lines.append("")
-    lines.append("By role:")
-    lines.append(f"  - system:        {summary.get('system_messages', 0)}")
-    lines.append(f"  - user:          {summary.get('user_messages', 0)}")
-    lines.append(f"  - assistant:     {summary.get('assistant_messages', 0)}")
-    lines.append(f"  - tool:          {summary.get('tool_messages', 0)}")
-    lines.append("")
-    lines.append(f"Tool calls:        {summary.get('total_tool_calls', 0)}")
-    lines.append(f"Unique tools used: {tools_str}")
+    console.print(f"  [dim]Unique tools used:[/] [green]{tools_str}[/green]")
 
     # Token usage
+    console.print()
+    console.print("[yellow]Token usage:[/]")
     if summary.get("using_actual_tokens"):
-        lines.append(f"Prompt tokens:     {summary.get('total_prompt_tokens', 0)}")
-        lines.append(f"Completion tokens: {summary.get('total_completion_tokens', 0)}")
-        lines.append(f"Total tokens:      {summary.get('total_tokens', 0)}")
+        console.print(
+            f"  [dim]Prompt:[/]     [yellow]{summary.get('total_prompt_tokens', 0)}[/yellow]"
+        )
+        console.print(
+            f"  [dim]Completion:[/] [yellow]{summary.get('total_completion_tokens', 0)}[/yellow]"
+        )
+        console.print(f"  [dim]Total:[/]      [yellow]{summary.get('total_tokens', 0)}[/yellow]")
     else:
-        lines.append(f"Token estimate:    {summary.get('total_tokens_estimate', 0)}")
+        console.print(
+            f"  [dim]Estimate:[/] [yellow]{summary.get('total_tokens_estimate', 0)}[/yellow]"
+        )
 
     # Context window
-    lines.append(
-        f"Context window:    {summary.get('context_window_percent', 0):.1f}% of {summary.get('context_window_size', 0):,} ({summary.get('model', '')})"
+    console.print()
+    console.print("[magenta]Context window:[/]")
+    console.print(
+        f"  [dim]Usage:[/] [magenta]{summary.get('context_window_percent', 0):.1f}%[/magenta] "
+        f"[dim]of[/] [magenta]{summary.get('context_window_size', 0):,}[/magenta] "
+        f"[dim]({summary.get('model', '')})[/]"
     )
 
+    # Project instructions (simplified - no mtime, no sha256)
     project_instructions_raw = summary.get("project_instructions")
     if isinstance(project_instructions_raw, dict):
+        console.print()
+        console.print("[bold cyan]Project instructions (AGENTS.md):[/]")
         project_instructions = cast(dict[str, Any], project_instructions_raw)
-        lines.append("")
-        lines.append("Project instructions (AGENTS.md):")
 
         status = project_instructions.get("status", "unknown")
         path = project_instructions.get("path", "")
         status_str = status if isinstance(status, str) else str(status)
         path_str = path if isinstance(path, str) else str(path)
-        lines.append(f"  - status:        {status_str}")
-        lines.append(f"  - path:          {path_str}")
+        console.print(f"  [dim]Status:[/] [cyan]{status_str}[/cyan]")
+        console.print(f"  [dim]Path:[/]   {path_str}")
 
-        if "bytes" in project_instructions:
-            lines.append(f"  - bytes:         {project_instructions.get('bytes')}")
+        # Size in human-readable format
+        bytes_val = project_instructions.get("bytes")
+        if bytes_val is not None:
+            size_str = _format_size(int(bytes_val))
+            console.print(f"  [dim]Size:[/]   {size_str}")
+
+        # Line count
         if "lines" in project_instructions:
-            lines.append(f"  - lines:         {project_instructions.get('lines')}")
-        if "mtime" in project_instructions:
-            lines.append(f"  - mtime:         {project_instructions.get('mtime')}")
-        if "sha256" in project_instructions:
-            lines.append(f"  - sha256:        {project_instructions.get('sha256')}")
-        if "error" in project_instructions:
-            lines.append(f"  - error:         {project_instructions.get('error')}")
+            console.print(f"  [dim]Lines:[/]  {project_instructions.get('lines')}")
 
-    lines.append("-" * 80)
-    return "\n".join(lines)
+        # Error message if unreadable
+        if "error" in project_instructions:
+            console.print(f"  [dim]Error:[/]  {project_instructions.get('error')}")
+
+    # Footer
+    console.print(f"[dim]{'-' * 80}[/]", justify="center")
+    console.print()
