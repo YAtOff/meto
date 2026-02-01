@@ -190,3 +190,4 @@ cython_debug/
 
 # Project specific ignores
 .plans/
+.ralph/
