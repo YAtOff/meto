@@ -93,12 +93,12 @@ def _run_single_prompt(
                 agent = get_agent_for_session()
 
             for output in run_agent_loop(cmd_result.prompt, agent):
-                print(output)
+                print(output, flush=True)
         return
 
     # No slash command, run agent loop with user input
     for output in run_agent_loop(user_input, get_agent_for_session()):
-        print(output)
+        print(output, flush=True)
 
 
 def interactive_loop(
@@ -191,8 +191,12 @@ def run(
         try:
             _run_single_prompt(input_text, session)
         except AgentInterrupted:
-            print("\n[Agent interrupted]", file=sys.stderr)
+            print("\n[Agent interrupted]", file=sys.stderr, flush=True)
+            sys.stdout.flush()
+            sys.stderr.flush()
             raise typer.Exit(code=130) from None
+        sys.stdout.flush()
+        sys.stderr.flush()
         raise typer.Exit(code=0)
 
     interactive_loop(session=session, yolo_mode=yolo_mode)
