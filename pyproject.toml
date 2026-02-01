@@ -59,6 +59,7 @@ dev = [
     "rich>=14.2.0",
     "basedpyright>=1.37.1",
     "funlog>=0.2.1",
+    "ipdb>=0.13.13",
 ]
 
 [project.scripts]
