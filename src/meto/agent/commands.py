@@ -430,6 +430,14 @@ def _cmd_implement(_args: list[str], session: Session) -> CommandResult | None:
         print("Not in plan mode.")
         return None
 
+    # Parse arguments
+    try:
+        use_worktree = _parse_implement_args(_args)
+    except ValueError as e:
+        print(f"Implement command error: {e}")
+        print("Usage: /implement [--worktree]")
+        return None
+
     exit_result = session.exit_mode()
 
     # Clear history completely
@@ -438,27 +446,55 @@ def _cmd_implement(_args: list[str], session: Session) -> CommandResult | None:
     session.session_logger = session.session_logger_cls(session.session_id)
 
     # Insert follow-up instruction if provided by the mode.
+    system_msg = None
     if exit_result and exit_result.followup_system_message:
+        system_msg = exit_result.followup_system_message
+
+        # Append worktree instruction to system message if --worktree flag set
+        if use_worktree:
+            worktree_instruction = """
+
+GIT WORKTREE MODE:
+You MUST create a git worktree for isolated development before starting implementation.
+
+Required workflow:
+1. Use the load_skill tool with skill name "git-worktrees" to load the skill
+2. Follow the git-worktrees skill instructions to create a worktree
+3. Perform all implementation work in the created worktree
+4. Report the worktree location when implementation is complete
+
+Start by calling: load_skill(name="git-worktrees")"""
+            system_msg += worktree_instruction
+
         session.history.append(
             {
                 "role": "system",
-                "content": exit_result.followup_system_message,
+                "content": system_msg,
             }
         )
         print(f"History cleared. Follow the plan in: {exit_result.artifact_path}")
+        if use_worktree:
+            print("Note: Implementation will use a git worktree for isolation.")
 
         # Prompt user to start implementation
         from rich.console import Console
         from rich.prompt import Confirm
 
         console = Console()
+        prompt_text = (
+            "First, create a git worktree using the git-worktrees skill. "
+            "Please read the plan file and start implementing it."
+            if use_worktree
+            else "Please read the plan file and start implementing it."
+        )
+
         if Confirm.ask(
             "\nStart implementing the plan now?",
             console=console,
             default=True,
         ):
             # Return result to trigger implementation
-            return CommandResult(prompt="Please read the plan file and start implementing it.")
+            return CommandResult(prompt=prompt_text)
         return None
     else:
         print(
@@ -501,6 +537,7 @@ COMMANDS: dict[str, SlashCommandSpec] = {
     "/implement": SlashCommandSpec(
         handler=_cmd_implement,
         description="Exit plan mode + prompt to start implementation",
+        usage="/implement [--worktree]",
     ),
     "/plan": SlashCommandSpec(
         handler=_cmd_plan,
@@ -607,6 +644,24 @@ def _parse_export_args(args: list[str]) -> tuple[str, str, bool]:
         return ns.path, export_format, ns.full
     except argparse.ArgumentError as e:
         raise ValueError(str(e)) from e
+
+
+def _parse_implement_args(args: list[str]) -> bool:
+    """Parse /implement arguments.
+
+    Returns:
+        True if --worktree flag is present, False otherwise
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--worktree", action="store_true", default=False)
+
+    try:
+        ns = parser.parse_args(args)
+        return ns.worktree
+    except (argparse.ArgumentError, SystemExit) as e:
+        # SystemExit is raised for unrecognized arguments; convert to ValueError
+        # The error message was printed to stderr by argparse, but we'll provide a generic message
+        raise ValueError("unrecognized arguments") from e
 
 
 def _resolve_export_path(
