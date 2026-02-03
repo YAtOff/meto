@@ -1,7 +1,14 @@
-# Example hooks configuration
+# Hooks configuration
 # Hooks run shell commands at lifecycle points: pre_tool_use, post_tool_use, session_start
 
 hooks:
+  # Block dangerous shell commands before execution
+  - name: "check-dangerous-commands"
+    event: "pre_tool_use"
+    tools: ["shell"]
+    command: "scripts/check_shell_command.py"
+    timeout: 10
+
   # Log all shell commands to audit file
   - name: "audit-shell"
     event: "post_tool_use"
