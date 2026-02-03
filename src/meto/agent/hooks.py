@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -107,6 +108,90 @@ class HookInput:
         return json.dumps(data)
 
 
+def is_python_script(command: str) -> bool:
+    """Check if a hook command is a Python script.
+
+    Returns True if the first token ends with .py (case-insensitive),
+    but not if an interpreter is already specified (e.g., 'python script.py').
+    """
+    if not command or not command.strip():
+        return False
+
+    first_token = command.strip().split()[0].lower()
+    # Check if it's a .py file but not an interpreter command
+    return first_token.endswith(".py") and first_token not in {
+        "python",
+        "python3",
+        "pypy",
+        "python.exe",
+        "python3.exe",
+    }
+
+
+def run_python_script(
+    command: str,
+    env: dict[str, str],
+    timeout: int,
+    cwd: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Execute a Python script using sys.executable.
+
+    This ensures the script runs with the same Python interpreter as meto.
+    """
+    if not sys.executable:
+        raise RuntimeError("sys.executable not available - cannot run Python script")
+
+    # Parse command into script path and arguments
+    # Use a simple parser that handles quoted arguments properly
+    # Don't use shlex.split() as it mishandles Windows paths with backslashes
+    parts = []
+    current = []
+    in_quote = False
+    quote_char = None
+
+    i = 0
+    while i < len(command):
+        c = command[i]
+
+        if in_quote:
+            if c == quote_char:
+                in_quote = False
+                quote_char = None
+            else:
+                current.append(c)
+        elif c in ('"', "'"):
+            in_quote = True
+            quote_char = c
+        elif c.isspace():
+            if current:
+                parts.append("".join(current))
+                current = []
+        else:
+            current.append(c)
+
+        i += 1
+
+    if current:
+        parts.append("".join(current))
+
+    if not parts:
+        raise ValueError("Empty command")
+
+    script_path = parts[0]
+    args = parts[1:]
+
+    argv = [sys.executable, script_path] + args
+
+    return subprocess.run(
+        argv,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        cwd=cwd,
+    )
+
+
 @dataclass
 class HooksManager:
     """Manages hook loading and execution."""
@@ -177,6 +262,33 @@ class HooksManager:
         try:
             env = os.environ.copy()
             env["HOOK_INPUT_JSON"] = hook_input.to_json()
+
+            # Try to run Python scripts directly with sys.executable
+            if is_python_script(hook.command):
+                try:
+                    proc = run_python_script(
+                        command=hook.command,
+                        env=env,
+                        timeout=hook.timeout,
+                        cwd=Path.cwd(),
+                    )
+                    blocked = hook_input.event == "pre_tool_use" and proc.returncode == EXIT_BLOCK
+                    success = proc.returncode == EXIT_OK
+
+                    return HookResult(
+                        hook_name=hook.name,
+                        success=success,
+                        exit_code=proc.returncode,
+                        blocked=blocked,
+                        stdout=proc.stdout,
+                        stderr=proc.stderr,
+                    )
+                except Exception as e:
+                    # Log warning and fall back to shell execution
+                    logger.warning(
+                        f"Python execution failed for hook '{hook.name}': {e}. "
+                        f"Falling back to shell execution."
+                    )
 
             # Use shell runner from tool_runner
             runner = pick_shell_runner()
