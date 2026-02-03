@@ -14,3 +14,10 @@ hooks:
     tools: ["write_file"]
     command: |
       just lint
+
+  # Protect secret files from being read or written
+  - name: "secret-file-protection"
+    event: "pre_tool_use"
+    tools: ["read_file", "write_file"]
+    command: scripts/check_secret_files.py
+    timeout: 10
