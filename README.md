@@ -1,321 +1,285 @@
-# Meto
+# meto
 
-![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
-![Poetry](https://img.shields.io/badge/poetry-1.8.0-black.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+A minimal coding agent CLI tool. AI agent runs tool-calling loop with multiple tools for command execution.
 
-**Meto** is a Python-based framework designed to build, manage, and orchestrate autonomous AI agents. It provides a robust architecture for managing agent lifecycles, tool execution, and interactions with Large
-Language Models (LLMs) using a modern, type-safe Python stack.
+## Philosophy
 
-## 🚀 Features
+**Multiple tools + ONE loop (tool-calling) = capable coding agent**
 
-- **Agent Orchestration:** Comprehensive engine for managing agent lifecycles, sessions, and command loops.
-- **Tool System:** Flexible tool runner and schema definitions for extending agent capabilities (e.g., via OpenAI function calling).
-- **Rich CLI:** A modern, intuitive command-line interface built with [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/).
-- **Type Safety:** Strict type validation and settings management using [Pydantic](https://docs.pydantic.dev/) and [Basedpyright](https://github.com/DetachHead/basedpyright).
-- **Developer Experience:** Pre-configured with [Ruff](https://docs.astral.sh/ruff/) (linting), [Black](https://black.readthedocs.io/) (formatting), and [Pytest](https://docs.pytest.org/).
+meto provides a streamlined interface for AI-assisted coding through a simple but powerful architecture: an LLM with access to various tools (shell execution, file operations, grep, web fetch, task management) running in a continuous tool-calling loop until the task is complete.
 
-## 🛠️ Tech Stack
+## Features
 
-- **Language:** Python 3.13
-- **AI / LLM:**
-  - `openai` (LLM interaction)
-- **Data & Config:**
-  - `pydantic`, `pydantic-settings` (Validation & Settings)
-- **CLI / UI:**
-  - `typer` (CLI framework)
-  - `rich` (Terminal output)
-  - `prompt_toolkit` (Interactive prompts)
-- **Utilities:**
-  - `tenacity` (Retry logic)
-  - `httpx`, `requests` (HTTP clients)
-- **Development:**
-  - **Build:** Poetry
-  - **Testing:** Pytest, Pytest-Sugar
-  - **Linting:** Ruff
-  - **Formatting:** Black
-  - **Type Checking:** Basedpyright
+- **Interactive & One-Shot Modes**: Run interactively with a REPL or execute single commands
+- **Tool-Calling Loop**: Autonomous agent that can execute commands, read/write files, search code, and more
+- **Session Persistence**: All conversations saved as JSONL for easy resumption
+- **Subagent Pattern**: Spawn isolated agents for subtasks with fresh context
+- **Custom Agents**: Define specialized agents with specific tool permissions
+- **Skills System**: Lazy-loaded domain expertise modules for on-demand knowledge injection
+- **Plan Mode**: Systematic exploration and planning workflow before implementation
+- **Hooks System**: Extend agent behavior with shell commands at lifecycle events
+- **Slash Commands**: Interactive commands for session management and workflow shortcuts
 
-## 📁 Project Structure
-
-The project follows a standard Python layout using `src/` for code organization.
-
-```
-meto/
-├── .venv/                  # Virtual Environment
-├── dist/                   # Distribution files
-├── src/meto/               # Application Source Code
-│   ├── agent/            # Core Agent Engine
-│   │   ├── agent.py       # Main Agent class definition
-│   │   ├── agent_loop.py  # Execution loop logic
-│   │   ├── agent_loader.py # Loading agent configurations
-│   │   ├── agent_registry.py # Registry for managing agents
-│   │   ├── session.py      # Session management
-│   │   ├── tool_runner.py  # Tool execution logic
-│   │   ├── tool_schema.py  # Tool schemas (OpenAI compatible)
-│   │   ├── context.py      # Agent state/context
-│   │   ├── prompt.py       # Prompt construction
-│   │   └── ...
-│   ├── cli.py             # Command-line interface (Typer)
-│   ├── conf.py            # Application configuration
-│   └── __main__.py       # Module entry point
-├── tests/                  # Test Suite (Pytest)
-│   ├── agent/            # Unit tests for agent logic
-│   ├── test_placeholder.py
-│   └── ...
-├── pyproject.toml         # Poetry config, dependencies & tools
-├── ruff.toml              # Ruff linter configuration
-├── pyproject.toml         # Project metadata
-└── README.md               # This file
-```
-
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
 - Python 3.13+
-- [Poetry](https://python-poetry.org/) (recommended)
+- [uv](https://github.com/astral-sh/uv) (recommended) or pip
 
-### Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd meto
-   ```
-
-2. **Install dependencies using Poetry:**
-   ```bash
-   poetry install
-   ```
-
-3. **Activate the virtual environment:**
-   ```bash
-   poetry shell
-   ```
-
-## 🏃 Usage
-
-### Command Line Interface
-
-Meto exposes its functionality primarily through a CLI built with Typer.
+### Install from source
 
 ```bash
-# Run the application
-python -m meto
+# Clone the repository
+git clone <repository-url>
+cd meto
 
-# Or use poetry to run the command
-poetry run meto
+# Install dependencies and run tests
+just
 
-# Display help (depending on CLI structure)
-poetry run meto --help
+# Or install as local tool
+uv tool install --editable .
 ```
 
-### Python API
+## Quick Start
 
-You can also import Meto directly into your Python scripts:
+### 1. Configure LLM Access
 
-```python
-from meto.agent import Agent
-
-# Initialize and run an agent
-agent = Agent(name="my-agent")
-agent.run()
-```
-
-## 🧪 Testing
-
-Run the test suite using Pytest.
+meto uses LiteLLM proxy for model-agnostic LLM access. Set up your environment:
 
 ```bash
-# Run all tests
-pytest
-
-# Run with sugar output (configured in pyproject.toml)
-pytest
+# Create .env file
+cat > .env << EOF
+METO_LLM_API_KEY=your-api-key
+METO_LLM_BASE_URL=model-api-endpoint
+METO_DEFAULT_MODEL=model-name
+EOF
 ```
 
-## 🛠️ Development
+### 2. Run Interactive Mode
 
-This project uses a modern Python toolchain.
-
-- **Linting:**
-  ```bash
-  ruff check .
-  ```
-
-- **Formatting:**
-  ```bash
-  black .
-  ```
-
-- **Type Checking:**
-  ```bash
-  basedpyright src
-  ```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+```bash
+# Start interactive session
+uv run meto
 ```
-Here is the content for a `README.md` file based on the project structure analysis. You can copy the text below, save it as `README.md`, and place it in the root directory of your project.
+
+### 3. One-Shot Mode
+
+```bash
+# Execute single command
+uv run meto --one-shot --prompt "fix the bug in src/main.py"
+
+# or
+echo "fix the bug in src/main.py" | uv run meto --one-shot
+
+# Skip permission prompts with --yolo flag
+uv run meto --one-shot --yolo --prompt "fix the bug in src/main.py"
+```
+
+## Configuration
+
+Environment variables (`.env` supported):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `METO_LLM_API_KEY` | API key for LLM provider | - |
+| `METO_LLM_BASE_URL` | LLM provider API endpoint URL | - |
+| `METO_DEFAULT_MODEL` | Model identifier | - |
+| `METO_MAIN_AGENT_MAX_TURNS` | Max iterations for main agent | `100` |
+| `METO_SUBAGENT_MAX_TURNS` | Max iterations for subagents | `25` |
+| `METO_TOOL_TIMEOUT_SECONDS` | Shell command timeout | `300` |
+| `METO_MAX_TOOL_OUTPUT_CHARS` | Max tool output length | `50000` |
+| `METO_AGENTS_DIR` | Custom agents directory | `.meto/agents` |
+| `METO_SKILLS_DIR` | Skills directory | `.meto/skills` |
+| `METO_PLAN_DIR` | Plan mode artifacts | `~/.meto/plans` |
+| `METO_YOLO_MODE` | Skip permission prompts for tools | `false` |
+
+### YOLO Mode
+
+By default, meto prompts for permission before executing potentially dangerous operations (like shell commands). YOLO mode ("You Only Live Once") disables these safety prompts for faster, uninterrupted operation.
+
+**Enable YOLO mode:**
+
+```bash
+# Via command-line flag
+uv run meto --yolo
+
+# Via environment variable
+export METO_YOLO_MODE=true
+uv run meto
+
+# In .env file
+echo "METO_YOLO_MODE=true" >> .env
+```
+
+**⚠️ Warning**: YOLO mode skips all permission checks. Only use this when you fully trust the agent's operations or are working in a safe/sandboxed environment.
+
+## Core Concepts
+
+### Agent Loop
+
+1. User prompt → conversation history
+2. LLM call with system prompt + history + available tools
+3. If tool calls: execute tools, append results to history, loop back to step 2
+4. If no tool calls: return final response
+
+### Built-in Agents
+
+- **code** (default): Full access to all tools for implementation
+- **explore**: Read-only access for codebase exploration
+- **plan**: Design-only agent for planning without execution
+- **planner**: Specialized agent for plan mode workflow
+
+### Session Modes
+
+Modes customize prompt and UI behavior:
+
+- **Plan Mode**: Systematic exploration and planning before implementation
+  - Enter with `/plan` command
+  - Creates structured plan file in `~/.meto/plans/`
+  - Exit with `/done` or start implementation with `/implement`
+
+### Tools Available
+
+- **shell**: Execute bash/PowerShell commands
+- **read_files**: Read file contents
+- **write_file**: Create or overwrite files
+- **edit_file**: Apply targeted edits to files
+- **grep**: Search code with regex patterns
+- **web_fetch**: Fetch and parse web content
+- **run_task**: Spawn subagent for isolated subtasks
+- **load_skill**: Load domain expertise modules on-demand
+- **manage_todos***: Task tracking (create, update, list, get)
+
+## Customization
+
+### Custom Agents
+
+Define specialized agents in `.meto/agents/{name}.md`:
 
 ```markdown
-# Meto
+---
+name: reviewer
+description: Code review specialist
+tools:
+  - read_files
+  - grep
+  - web_fetch
+---
 
-![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
-![Poetry](https://img.shields.io/badge/poetry-1.8.0-black.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-
-**Meto** is a Python-based framework designed to build, manage, and orchestrate autonomous AI agents. It provides a robust architecture for managing agent lifecycles, tool execution, and interactions with Large Language Models (LLMs) using a modern, type-safe Python stack.
-
-## 🚀 Features
-
-- **Agent Orchestration:** Comprehensive engine for managing agent lifecycles, sessions, and command loops.
-- **Tool System:** Flexible tool runner and schema definitions for extending agent capabilities (e.g., via OpenAI function calling).
-- **Rich CLI:** A modern, intuitive command-line interface built with [Typer](https://typer.tiangolo.com/) and [Rich](https://rich.readthedocs.io/).
-- **Type Safety:** Strict type validation and settings management using [Pydantic](https://docs.pydantic.dev/) and [Basedpyright](https://github.com/DetachHead/basedpyright).
-- **Developer Experience:** Pre-configured with [Ruff](https://docs.astral.sh/ruff/) (linting), [Black](https://black.readthedocs.io/) (formatting), and [Pytest](https://docs.pytest.org/).
-
-## 🛠️ Tech Stack
-
-- **Language:** Python 3.13
-- **AI / LLM:**
-  - `openai` (LLM interaction)
-- **Data & Config:**
-  - `pydantic`, `pydantic-settings` (Validation & Settings)
-- **CLI / UI:**
-  - `typer` (CLI framework)
-  - `rich` (Terminal output)
-  - `prompt_toolkit` (Interactive prompts)
-- **Utilities:**
-  - `tenacity` (Retry logic)
-  - `httpx`, `requests` (HTTP clients)
-- **Development:**
-  - **Build:** Poetry
-  - **Testing:** Pytest, Pytest-Sugar
-  - **Linting:** Ruff
-  - **Formatting:** Black
-  - **Type Checking:** Basedpyright
-
-## 📁 Project Structure
-
-The project follows a standard Python layout using `src/` for code organization.
-
-```
-meto/
-├── .venv/                  # Virtual Environment
-├── dist/                   # Distribution files
-├── src/meto/               # Application Source Code
-│   ├── agent/            # Core Agent Engine
-│   │   ├── agent.py       # Main Agent class definition
-│   │   ├── agent_loop.py  # Execution loop logic
-│   │   ├── agent_loader.py # Loading agent configurations
-│   │   ├── agent_registry.py # Registry for managing agents
-│   │   ├── session.py      # Session management
-│   │   ├── tool_runner.py  # Tool execution logic
-│   │   ├── tool_schema.py  # Tool schemas (OpenAI compatible)
-│   │   ├── context.py      # Agent state/context
-│   │   ├── prompt.py       # Prompt construction
-│   │   └── ...
-│   ├── cli.py             # Command-line interface (Typer)
-│   ├── conf.py            # Application configuration
-│   └── __main__.py       # Module entry point
-├── tests/                  # Test Suite (Pytest)
-│   ├── agent/            # Unit tests for agent logic
-│   ├── test_placeholder.py
-│   └── ...
-├── pyproject.toml         # Poetry config, dependencies & tools
-├── ruff.toml              # Ruff linter configuration
-├── pyproject.toml         # Project metadata
-└── README.md               # This file
+You are an expert code reviewer. Focus on:
+- Security vulnerabilities
+- Performance issues
+- Best practices
+- Code maintainability
 ```
 
-## 📦 Installation
+### Skills System
 
-### Prerequisites
+Create domain expertise modules in `.meto/skills/{skill-name}/SKILL.md`:
 
-- Python 3.13+
-- [Poetry](https://python-poetry.org/) (recommended)
+```markdown
+---
+name: commit-message
+description: Generate conventional commit messages
+---
 
-### Setup
+# Commit Message Skill
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd meto
-   ```
+You are an expert at writing clear, informative git commit messages...
+```
 
-2. **Install dependencies using Poetry:**
-   ```bash
-   poetry install
-   ```
+Skills are lazy-loaded only when needed via the `load_skill` tool.
 
-3. **Activate the virtual environment:**
-   ```bash
-   poetry shell
-   ```
+### Custom Commands
 
-## 🏃 Usage
+Add workflow shortcuts in `.meto/commands/{name}.md`:
 
-### Command Line Interface
+```markdown
+---
+description: Review pull request changes
+allowed-tools:
+  - shell
+  - read_files
+  - grep
+context: fork
+---
 
-Meto exposes its functionality primarily through a CLI built with Typer.
+Review the current pull request:
+1. Analyze the diff
+2. Check for common issues
+3. Provide constructive feedback
+```
+
+Use with `/name [arguments]` in interactive mode.
+
+### Hooks System
+
+Extend agent behavior with shell commands at lifecycle events in `.meto/hooks.yaml`:
+
+```yaml
+hooks:
+  - name: security-check
+    event: pre_tool_use
+    tools: [shell]
+    command: scripts/check_shell_command.py
+    timeout: 10
+```
+
+**Supported Events**:
+- `session_start`: When agent session begins
+- `pre_tool_use`: Before tool execution (can block with exit code 2)
+- `post_tool_use`: After tool execution
+
+## Interactive Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/export` | Export conversation history |
+| `/compact` | Compact session history |
+| `/todos` | Show task list |
+| `/plan` | Enter plan mode |
+| `/implement` | Exit plan mode and start implementation |
+| `/done` | Exit current mode |
+| `/exit`, `/quit` | Exit meto |
+
+## Development
 
 ```bash
-# Run the application
-python -m meto
+# Primary workflows (via just)
+just              # install + lint + test
+just install      # sync dependencies
+just lint         # ruff format + check
+just test         # pytest
+just build        # build wheel
+just clean        # remove build artifacts
 
-# Or use poetry to run the command
-poetry run meto
-
-# Display help (depending on CLI structure)
-poetry run meto --help
+# Direct commands
+uv run pytest                    # run tests
+uv run python devtools/lint.py   # lint
+uv build                         # build
+uv tool install --editable .     # install as local tool
 ```
 
-### Python API
+## Architecture
 
-You can also import Meto directly into your Python scripts:
+- `src/meto/cli.py` - CLI interface and interactive mode
+- `src/meto/agent/agent_loop.py` - Main agent loop
+- `src/meto/agent/agent.py` - Agent class factory
+- `src/meto/agent/tool_runner.py` - Tool execution implementations
+- `src/meto/agent/tool_schema.py` - Tool schemas (OpenAI format)
+- `src/meto/agent/session.py` - Session persistence (JSONL)
+- `src/meto/agent/loaders/` - Agent, skill, and frontmatter loaders
+- `src/meto/agent/modes/` - Session mode system
+- `src/meto/agent/hooks.py` - Hook system
 
-```python
-from meto.agent import Agent
+Sessions persist as JSONL in `~/.meto/sessions/`.
 
-# Initialize and run an agent
-agent = Agent(name="my-agent")
-agent.run()
-```
-
-## 🧪 Testing
-
-Run the test suite using Pytest.
-
-```bash
-# Run all tests
-pytest
-
-# Run with sugar output (configured in pyproject.toml)
-pytest
-```
-
-## 🛠️ Development
-
-This project uses a modern Python toolchain.
-
-- **Linting:**
-  ```bash
-  ruff check .
-  ```
-
-- **Formatting:**
-  ```bash
-  black .
-  ```
-
-- **Type Checking:**
-  ```bash
-  basedpyright src
-  ```
-
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributing
+
+Contributions welcome! Please check existing issues or open a new one to discuss changes.
